@@ -1,11 +1,11 @@
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 use anchor_lang::prelude::*;
+use anchor_lang::AccountsClose;
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
 #[program]
 pub mod comptoir {
-    use anchor_lang::AccountsClose;
     use super::*;
 
     pub fn create_comptoir(
@@ -66,70 +66,113 @@ pub mod comptoir {
         Ok(())
     }
 
-    pub fn unlist_item(ctx: Context<UnlistItem>, nounce: u8, quantity: u64) -> ProgramResult {
-        if ctx.accounts.item.quantity < quantity {
+    pub fn unlist_item(ctx: Context<UnlistItem>, nounce: u8, quantity_to_unlist: u64) -> ProgramResult {
+        if ctx.accounts.item.quantity < quantity_to_unlist {
             return Err(ErrorCode::ErrTryingToUnlistMoreThanOwned.into());
         }
 
-        let seeds = &[
-            "vaut".as_bytes(),
-            ctx.accounts.item.mint.as_ref(),
-            &[nounce], ];
-        let signer = &[&seeds[..]];
+        if quantity_to_unlist > 0 {
+            let seeds = &[
+                "vaut".as_bytes(),
+                ctx.accounts.item.mint.as_ref(),
+                &[nounce], ];
+            let signer = &[&seeds[..]];
 
-        let cpi_accounts = Transfer {
-            from: ctx.accounts.vault.to_account_info(),
-            to: ctx.accounts.seller_token_account.to_account_info(),
-            authority: ctx.accounts.vault.to_account_info(),
-        };
+            let cpi_accounts = Transfer {
+                from: ctx.accounts.vault.to_account_info(),
+                to: ctx.accounts.seller_token_account.to_account_info(),
+                authority: ctx.accounts.vault.to_account_info(),
+            };
 
-        let cpi_ctx = CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(), cpi_accounts, signer);
-        token::transfer(cpi_ctx, quantity)?;
+            let cpi_ctx = CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(), cpi_accounts, signer);
+            token::transfer(cpi_ctx, quantity_to_unlist)?;
+        }
 
-        ctx.accounts.item.close(ctx.accounts.authority.to_account_info())?;
+        if ctx.accounts.item.quantity == 0 {
+            ctx.accounts.item.close(ctx.accounts.authority.to_account_info())?;
+        }
         Ok(())
     }
 
     #[access_control(check_comptoir_has_mint(& ctx.accounts.comptoir))]
-    pub fn buy_item_with_mint(ctx: Context<BuyItemWithMint>, nounce: u8, ask_quantity: u64) -> ProgramResult {
-        let mut used_quantity = ask_quantity;
-        if ask_quantity > ctx.accounts.item.quantity {
-            used_quantity = ctx.accounts.item.quantity;
-        }
+    pub fn buy_item_with_mint<'a, 'b, 'c, 'info>(ctx: Context<'a, 'b, 'c, 'info, BuyItemWithMint<'info>>,
+                                                 nounce: u8, mint: Pubkey, ask_quantity: u64,  max_price: u64
+    ) -> ProgramResult {
+        let account_iter = &mut ctx.remaining_accounts.iter();
+        let mut remaining_to_buy = ask_quantity;
 
         let seeds = &[
             "vaut".as_bytes(),
-            ctx.accounts.item.mint.as_ref(),
+            mint.as_ref(),
             &[nounce], ];
         let signer = &[&seeds[..]];
 
-        let cpi_accounts = Transfer {
-            from: ctx.accounts.vault.to_account_info(),
-            to: ctx.accounts.buyer_nft_token_account.to_account_info(),
-            authority: ctx.accounts.vault.to_account_info(),
-        };
+        for account in &mut ctx.remaining_accounts.iter() {
+            let mut item: Account<'info, Item> = Account::<'info, Item>::try_from(account)?;
+            assert_eq!(ctx.accounts.comptoir.key(), item.comptoir_key);
 
-        let cpi_ctx = CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(), cpi_accounts, signer);
-        token::transfer(cpi_ctx, used_quantity)?;
+            if item.price > max_price {
+               return Err(ErrorCode::ErrItemPriceHigherThanMaxPrice.into());
+            }
 
-        let cpi_accounts = Transfer {
-            from: ctx.accounts.buyer_paying_token_account.to_account_info(),
-            to: ctx.accounts.destination_token_account.to_account_info(),
-            authority: ctx.accounts.buyer.to_account_info(),
-        };
-        let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
+            let mut to_buy = remaining_to_buy;
+            if item.quantity < to_buy {
+                to_buy = item.quantity;
+            }
 
-        let amount = ctx.accounts.item.price.checked_mul(used_quantity).unwrap();
-        token::transfer(cpi_ctx, amount)?;
+            //Transfer Item from vault to buyer
+            let cpi_accounts = Transfer {
+                from: ctx.accounts.vault.to_account_info(),
+                to: ctx.accounts.buyer_nft_token_account.to_account_info(),
+                authority: ctx.accounts.vault.to_account_info(),
+            };
 
-        if used_quantity == ctx.accounts.item.quantity {
-            ctx.accounts.item.close(ctx.accounts.authority.to_account_info())?;
-        } else {
-            let item = &mut ctx.accounts.item;
-            item.quantity = item.quantity - used_quantity;
+            let cpi_ctx = CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(), cpi_accounts, signer);
+            token::transfer(cpi_ctx, to_buy)?;
+
+            let seller_token_account = next_account_info(account_iter)?;
+            assert_eq!(seller_token_account.key(), item.destination);
+            let amount = item.price.checked_mul(to_buy).unwrap();
+
+            //Pay the seller
+            transfer(
+              ctx.accounts.buyer_paying_token_account.to_account_info(),
+              seller_token_account.to_account_info(),
+              ctx.accounts.buyer.to_account_info(),
+              ctx.accounts.token_program.to_account_info(),
+                amount,
+            )?;
+            item.quantity = item.quantity - to_buy;
+            item.exit(ctx.program_id)?;
+
+            remaining_to_buy = remaining_to_buy - to_buy;
+            if remaining_to_buy == 0 {
+                break;
+            }
+        }
+
+        if remaining_to_buy != 0 {
+            return Err(ErrorCode::ErrCouldNotBuyEnoughItem.into());
         }
         Ok(())
     }
+}
+
+fn transfer<'info>(
+    payer: AccountInfo<'info>,
+    dest: AccountInfo<'info>,
+    authority: AccountInfo<'info>,
+    token_program: AccountInfo<'info>,
+    amount: u64,
+) -> ProgramResult {
+    let cpi_accounts = Transfer {
+        from: payer,
+        to: dest,
+        authority,
+    };
+    let cpi_ctx = CpiContext::new(token_program, cpi_accounts);
+
+    token::transfer(cpi_ctx, amount)
 }
 
 #[derive(Accounts)]
@@ -138,7 +181,6 @@ pub struct CreateComptoir<'info> {
     #[account(
     init,
     payer = payer,
-    space = 103,
     )]
     comptoir: Account<'info, Comptoir>,
 
@@ -176,7 +218,7 @@ pub struct ListItem<'info> {
     payer = payer,
     )]
     vault: Account<'info, TokenAccount>,
-    #[account(init, payer = payer, space = 212)]
+    #[account(init, payer = payer)]
     item: Account<'info, Item>,
 
     system_program: Program<'info, System>,
@@ -208,7 +250,7 @@ pub struct UnlistItem<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(_nounce: u8)]
+#[instruction(_nounce: u8, mint: Pubkey)]
 pub struct BuyItemWithMint<'info> {
     buyer: Signer<'info>,
     #[account(owner = buyer.key())] //are they even useful since the transfer would make the transaction fail ??
@@ -216,21 +258,12 @@ pub struct BuyItemWithMint<'info> {
     #[account(owner = buyer.key())]
     buyer_paying_token_account: Account<'info, TokenAccount>,
 
-    #[account(address = item.destination)]
-    destination_token_account: Account<'info, TokenAccount>,
-    #[account(mut)]
-    authority: AccountInfo<'info>,
-
-    #[account(mut, has_one = authority)]
-    item: Account<'info, Item>,
-
-    #[account(mut, address = item.comptoir_key)]
     comptoir: Account<'info, Comptoir>,
 
     #[account(
     seeds = [
     "vault".as_bytes(),
-    item.mint.as_ref()
+    mint.as_ref()
     ],
     bump = _nounce,
     )]
@@ -242,6 +275,7 @@ pub struct BuyItemWithMint<'info> {
 }
 
 #[account]
+#[derive(Default)]
 pub struct Comptoir {
     fees: u8,
     fees_destination: Pubkey,
@@ -250,6 +284,8 @@ pub struct Comptoir {
 }
 
 #[account]
+#[repr(C)]
+#[derive(Default)]
 pub struct Item {
     comptoir_key: Pubkey,
     price: u64,
@@ -263,11 +299,14 @@ pub struct Item {
 pub enum ErrorCode {
     #[msg("Trying to unlist more than owned")]
     ErrTryingToUnlistMoreThanOwned,
+    #[msg("Item price got higher than max price")]
+    ErrItemPriceHigherThanMaxPrice,
+    #[msg("Could not buy the required quantity of items")]
+    ErrCouldNotBuyEnoughItem,
     #[msg("Trying to buy item with mint but only accepts sol")]
     ErrComptoirDoesNotHaveMint,
     #[msg("Sol is not the right currency for this item")]
     ErrComptoirDoesNotAcceptSol,
-
 }
 
 fn check_comptoir_has_mint(comptoir: &Comptoir) -> Result<()> {
