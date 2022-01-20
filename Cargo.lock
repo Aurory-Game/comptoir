@@ -408,6 +408,7 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
+ "metaplex-token-metadata",
 ]
 
 [[package]]
@@ -737,6 +738,34 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe3179b85e1fd8b14447cbebadb75e45a1002f541b925f0bfec366d56a81c56d"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "metaplex-token-metadata"
+version = "0.0.1"
+source = "git+https://github.com/metaplex-foundation/metaplex?rev=8a69c0d01708b9bbd9cf34fd11bd57669773083d#8a69c0d01708b9bbd9cf34fd11bd57669773083d"
+dependencies = [
+ "arrayref",
+ "borsh",
+ "metaplex-token-vault",
+ "num-derive",
+ "num-traits",
+ "solana-program",
+ "spl-token",
+ "thiserror",
+]
+
+[[package]]
+name = "metaplex-token-vault"
+version = "0.0.1"
+source = "git+https://github.com/metaplex-foundation/metaplex?rev=8a69c0d01708b9bbd9cf34fd11bd57669773083d#8a69c0d01708b9bbd9cf34fd11bd57669773083d"
+dependencies = [
+ "borsh",
+ "num-derive",
+ "num-traits",
+ "solana-program",
+ "spl-token",
+ "thiserror",
 ]
 
 [[package]]

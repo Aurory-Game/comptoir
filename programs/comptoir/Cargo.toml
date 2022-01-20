@@ -19,4 +19,6 @@ default = []
 [dependencies]
 anchor-lang = "0.20.1"
 anchor-spl = "0.20.1"
-
+metaplex-token-metadata = { git = "https://github.com/metaplex-foundation/metaplex", rev = "8a69c0d01708b9bbd9cf34fd11bd57669773083d", features = [
+    "no-entrypoint",
+] }
