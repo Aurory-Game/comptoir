@@ -12,8 +12,11 @@ pub mod comptoir {
 
     pub fn create_comptoir(
         ctx: Context<CreateComptoir>,
-        fees: u16, fees_destination: Pubkey, authority: Pubkey, mint: Option<Pubkey>,
+        _nounce: u8,fees: u16, fees_destination: Pubkey, authority: Pubkey, mint: Pubkey,
     ) -> ProgramResult {
+        if fees > 100 {
+            return Err(ErrorCode::ErrFeeShouldLowerOrEqualThan100.into());
+        }
         let comptoir = &mut ctx.accounts.comptoir;
 
         comptoir.fees = fees;
@@ -43,7 +46,7 @@ pub mod comptoir {
             comptoir.authority = authority;
         }
         if let Some(mint) = optional_mint {
-            comptoir.mint = Some(mint);
+            comptoir.mint = mint;
         }
 
         Ok(())
@@ -131,7 +134,6 @@ pub mod comptoir {
         Ok(())
     }
 
-    #[access_control(check_comptoir_has_mint(& ctx.accounts.comptoir))]
     pub fn buy_item_with_mint<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, BuyItemWithMint<'info>>,
         nounce: u8, mint: Pubkey, ask_quantity: u64,  max_price: u64
@@ -272,10 +274,14 @@ fn calculate_fee(amount: u64, fee_share: u16, basis: u64) -> u64 {
 
 
 #[derive(Accounts)]
+#[instruction(nounce: u8)]
 pub struct CreateComptoir<'info> {
+    #[account(mut)]
     payer: Signer<'info>,
     #[account(
     init,
+    seeds = [ payer.key.as_ref()],
+    bump = nounce,
     payer = payer,
     )]
     comptoir: Account<'info, Comptoir>,
@@ -414,7 +420,7 @@ pub struct Comptoir {
     fees: u16,
     fees_destination: Pubkey,
     authority: Pubkey,
-    mint: Option<Pubkey>,
+    mint: Pubkey,
 }
 
 #[account]
@@ -448,6 +454,8 @@ impl Collection {
 
 #[error]
 pub enum ErrorCode {
+    #[msg("Fee should be <= 100")]
+    ErrFeeShouldLowerOrEqualThan100,
     #[msg("Trying to unlist more than owned")]
     ErrTryingToUnlistMoreThanOwned,
     #[msg("Item price got higher than max price")]
@@ -474,14 +482,6 @@ fn verify_metadata_mint(user_input_metadata_key: Pubkey, item_mint: Pubkey) -> R
     }
 
     return Ok(())
-}
-
-fn check_comptoir_has_mint(comptoir: &Comptoir) -> Result<()> {
-    if let Some(_mint) = comptoir.mint {
-        return Ok(())
-    }
-
-    return Err(ErrorCode::ErrComptoirDoesNotAcceptSol.into());
 }
 
 pub mod constant {
