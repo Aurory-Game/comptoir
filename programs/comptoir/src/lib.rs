@@ -61,7 +61,7 @@ pub mod comptoir {
 
         collection.comptoir_key = ctx.accounts.comptoir.key();
         collection.required_verifier = required_verifier;
-        collection.name = name;
+        collection.symbol = name;
         collection.fee_share = fee_share;
 
         Ok(())
@@ -79,7 +79,7 @@ pub mod comptoir {
             collection.fee_share = Some(fee_share);
         }
         if let Some(name) = optional_name {
-            collection.name = name;
+            collection.symbol = name;
         }
         if let Some(required_verifier) = optional_required_verifier {
             collection.required_verifier = required_verifier;
@@ -437,7 +437,7 @@ pub struct SellOrder {
 #[derive(Default)]
 pub struct Collection {
     comptoir_key: Pubkey,
-    name: String,
+    symbol: String,
     required_verifier: Pubkey,
     fee_share: Option<u16>, //Takes priority over comptoir fees
 }
@@ -445,7 +445,7 @@ pub struct Collection {
 impl Collection {
     pub fn is_part_of_collection(&self, metadata: &Metadata) -> bool {
         return if let Some(creators) = metadata.data.creators.as_ref() {
-            metadata.data.name == self.name && creators.iter().any(|c| c.address == self.required_verifier && c.verified)
+            metadata.data.symbol == self.symbol && creators.iter().any(|c| c.address == self.required_verifier && c.verified)
         } else {
             false
         }
