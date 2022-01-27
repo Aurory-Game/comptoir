@@ -1,6 +1,8 @@
+use anchor_lang::solana_program::system_instruction::transfer;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 use anchor_lang::prelude::*;
 use anchor_lang::AccountsClose;
+use anchor_lang::solana_program::program::invoke;
 use metaplex_token_metadata::state::{Metadata, PREFIX};
 use crate::constant::TOKEN_METADATA_PROGRAM;
 
@@ -12,11 +14,8 @@ pub mod comptoir {
 
     pub fn create_comptoir(
         ctx: Context<CreateComptoir>,
-        _nounce: u8,fees: u16, fees_destination: Pubkey, authority: Pubkey, mint: Pubkey,
+        _nounce: u8, fees: u16, fees_destination: Pubkey, authority: Pubkey, mint: Pubkey,
     ) -> ProgramResult {
-        if fees > 100 {
-            return Err(ErrorCode::ErrFeeShouldLowerOrEqualThan100.into());
-        }
         let comptoir = &mut ctx.accounts.comptoir;
 
         comptoir.fees = fees;
@@ -24,6 +23,7 @@ pub mod comptoir {
         comptoir.authority = authority;
         comptoir.mint = mint;
 
+        comptoir.validate()?;
         Ok(())
     }
 
@@ -49,46 +49,48 @@ pub mod comptoir {
             comptoir.mint = mint;
         }
 
+        comptoir.validate()?;
         Ok(())
     }
 
 
     pub fn create_collection(
         ctx: Context<CreateCollection>,
-        _nounce: u8, name: String, required_verifier: Pubkey, fee_share: Option<u16>,
+        _nounce: u8, symbol: String, required_verifier: Pubkey, fee: Option<u16>,
     ) -> ProgramResult {
         let collection = &mut ctx.accounts.collection;
 
         collection.comptoir_key = ctx.accounts.comptoir.key();
         collection.required_verifier = required_verifier;
-        collection.symbol = name;
-        collection.fee_share = fee_share;
+        collection.symbol = symbol;
+        collection.fees = fee;
 
+        collection.validate()?;
         Ok(())
     }
 
     pub fn update_collection(
         ctx: Context<UpdateCollection>,
-        optional_fee_share: Option<u16>,
-        optional_name: Option<String>,
+        optional_fee: Option<u16>,
+        optional_symbol: Option<String>,
         optional_required_verifier: Option<Pubkey>,
     ) -> ProgramResult {
         let collection = &mut ctx.accounts.collection;
 
-        if let Some(fee_share) = optional_fee_share {
-            collection.fee_share = Some(fee_share);
+        if let Some(fee_share) = optional_fee {
+            collection.fees = Some(fee_share);
         }
-        if let Some(name) = optional_name {
-            collection.symbol = name;
+        if let Some(symbol) = optional_symbol {
+            collection.symbol = symbol;
         }
         if let Some(required_verifier) = optional_required_verifier {
             collection.required_verifier = required_verifier;
         }
-
+        collection.validate()?;
         Ok(())
     }
 
-    pub fn list_item(ctx: Context<ListItem>, price: u64, quantity: u64, destination: Pubkey) -> ProgramResult {
+    pub fn create_sell_order(ctx: Context<CreateSellOrder>, _nounce: u8, _salt: String, _sell_order_nounce: u8, price: u64, quantity: u64, destination: Pubkey) -> ProgramResult {
         let cpi_accounts = Transfer {
             from: ctx.accounts.seller_nft_token_account.to_account_info(),
             to: ctx.accounts.vault.to_account_info(),
@@ -106,27 +108,29 @@ pub mod comptoir {
         Ok(())
     }
 
-    pub fn unlist_item(ctx: Context<UnlistItem>, nounce: u8, quantity_to_unlist: u64) -> ProgramResult {
+    pub fn remove_sell_order(ctx: Context<RemoveSellOrder>, nounce: u8, quantity_to_unlist: u64) -> ProgramResult {
         if ctx.accounts.sell_order.quantity < quantity_to_unlist {
             return Err(ErrorCode::ErrTryingToUnlistMoreThanOwned.into());
         }
 
-        if quantity_to_unlist > 0 {
-            let seeds = &[
-                "vaut".as_bytes(),
-                ctx.accounts.sell_order.mint.as_ref(),
-                &[nounce], ];
-            let signer = &[&seeds[..]];
+        let seeds = &[
+            "vault".as_bytes(),
+            ctx.accounts.sell_order.mint.as_ref(),
+            &[nounce], ];
+        let signer = &[&seeds[..]];
 
-            let cpi_accounts = Transfer {
-                from: ctx.accounts.vault.to_account_info(),
-                to: ctx.accounts.seller_token_account.to_account_info(),
-                authority: ctx.accounts.vault.to_account_info(),
-            };
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.vault.to_account_info(),
+            to: ctx.accounts.seller_nft_token_account.to_account_info(),
+            authority: ctx.accounts.vault.to_account_info(),
+        };
 
-            let cpi_ctx = CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(), cpi_accounts, signer);
-            token::transfer(cpi_ctx, quantity_to_unlist)?;
-        }
+        let cpi_ctx = CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(), cpi_accounts, signer);
+        token::transfer(cpi_ctx, quantity_to_unlist)?;
+
+
+        let sell_order = &mut ctx.accounts.sell_order;
+        sell_order.quantity = sell_order.quantity.checked_sub(quantity_to_unlist).unwrap();
 
         if ctx.accounts.sell_order.quantity == 0 {
             ctx.accounts.sell_order.close(ctx.accounts.authority.to_account_info())?;
@@ -134,46 +138,60 @@ pub mod comptoir {
         Ok(())
     }
 
-    pub fn buy_item_with_mint<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info, BuyItemWithMint<'info>>,
-        nounce: u8, mint: Pubkey, ask_quantity: u64,  max_price: u64
+    pub fn buy<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, Buy<'info>>,
+        nounce: u8, asset_mint: Pubkey, ask_quantity: u64, max_price: u64,
     ) -> ProgramResult {
-        verify_metadata_mint(ctx.accounts.mint_metadata.key(), mint)?;
+        //verify_metadata_mint(ctx.accounts.mint_metadata.key(), mint)?; TODO use
+        let is_native = ctx.accounts.comptoir.mint.key() == spl_token::native_mint::id();
+
         let metadata = Metadata::from_account_info(ctx.accounts.mint_metadata.as_ref())?;
         ctx.accounts.collection.is_part_of_collection(&metadata);
+        let mut index = 0;
 
-        let account_iter = &mut ctx.remaining_accounts.iter();
 
-        let mut creators_distributions_option: Option<Vec<(&AccountInfo, u8)>> = None;
+        //verify creators and use associated token account if mint isnt native
+        let creators_distributions_option: Option<Vec<(&AccountInfo, u8)>> = None;
         if let Some(creators) = metadata.data.creators {
-            let mut creators_distributions = Vec::with_capacity(creators.len());
-
+            let mut creators_distributions = Vec::new();
             for i in 0..creators.len() {
-                let creator = next_account_info(account_iter)?;
-                creators_distributions[i] = (creator, creators[i].share);
+                let remaining_account_creator = &ctx.remaining_accounts[i];
+                if is_native {
+                    assert_eq!(remaining_account_creator.key(), creators[i].address);
+                    creators_distributions.push((remaining_account_creator, creators[i].share));
+                } else {
+                    let ata_seeds = &[
+                        remaining_account_creator.key.as_ref(),
+                        ctx.accounts.token_program.key.as_ref(),
+                        ctx.accounts.comptoir.mint.as_ref(),
+                    ];
+                    let creator_associated_token_addr = Pubkey::find_program_address(ata_seeds, &Pubkey::new("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL".as_bytes()));
+                    assert_eq!(remaining_account_creator.key(), creator_associated_token_addr.0);
+                    creators_distributions.push((remaining_account_creator, creators[i].share));
+                }
             }
-
-            creators_distributions_option = Some(creators_distributions);
         }
 
         let mut comptoir_fee = ctx.accounts.comptoir.fees;
-        if let Some(collection_share) = ctx.accounts.collection.fee_share {
+        if let Some(collection_share) = ctx.accounts.collection.fees {
             comptoir_fee = collection_share;
         }
 
         let seeds = &[
-            "vaut".as_bytes(),
-            mint.as_ref(),
+            "vault".as_bytes(),
+            asset_mint.as_ref(),
             &[nounce], ];
         let signer = &[&seeds[..]];
 
         let mut remaining_to_buy = ask_quantity;
-        for account in &mut ctx.remaining_accounts.iter() {
-            let mut sell_order: Account<'info, SellOrder> = Account::<'info, SellOrder>::try_from(account)?;
-            assert_eq!(sell_order.mint, mint);
+
+        while index < ctx.remaining_accounts.len() {
+            let mut sell_order: Account<'info, SellOrder> = Account::<'info, SellOrder>::try_from(&ctx.remaining_accounts[index])?;
+            index = index + 1;
+            assert_eq!(sell_order.mint, asset_mint);
 
             if sell_order.price > max_price {
-               return Err(ErrorCode::ErrItemPriceHigherThanMaxPrice.into());
+                return Err(ErrorCode::ErrItemPriceHigherThanMaxPrice.into());
             }
 
             let mut to_buy = remaining_to_buy;
@@ -191,38 +209,58 @@ pub mod comptoir {
             let cpi_ctx = CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(), cpi_accounts, signer);
             token::transfer(cpi_ctx, to_buy)?;
 
-            let seller_token_account = next_account_info(account_iter)?;
+            let seller_token_account = &ctx.remaining_accounts[index];
+            index = index + 1;
             assert_eq!(seller_token_account.key(), sell_order.destination);
             let total_amount = sell_order.price.checked_mul(to_buy).unwrap();
             let creators_share = calculate_fee(total_amount, metadata.data.seller_fee_basis_points, 10000);
             let comptoir_share = calculate_fee(total_amount, comptoir_fee, 10000);
             let seller_share = total_amount.checked_sub(creators_share).unwrap().checked_sub(comptoir_share).unwrap();
 
-            transfer_if_not_zero(
-              ctx.accounts.buyer_paying_token_account.to_account_info(),
-              seller_token_account.to_account_info(),
-              ctx.accounts.buyer.to_account_info(),
-              ctx.accounts.token_program.to_account_info(),
-              seller_share,
-            )?;
-            transfer_if_not_zero(
-                ctx.accounts.buyer_paying_token_account.to_account_info(),
-                ctx.accounts.comptoir_paying_token_account.to_account_info(),
-                ctx.accounts.buyer.to_account_info(),
-                ctx.accounts.token_program.to_account_info(),
-                comptoir_share,
-            )?;
-            if let Some(creators) = creators_distributions_option.as_ref() {
+            if is_native {
+                pay_native(
+                    ctx.accounts.buyer_paying_token_account.to_account_info(),
+                    seller_token_account.to_account_info(),
+                    ctx.accounts.system_program.to_account_info(),
+                    seller_share,
+                )?;
+            } else {
+                pay_spl(
+                    ctx.accounts.buyer_paying_token_account.to_account_info(),
+                    seller_token_account.to_account_info(),
+                    ctx.accounts.buyer.to_account_info(),
+                    ctx.accounts.token_program.to_account_info(),
+                    seller_share,
+                )?;
+
+                pay_spl(
+                    ctx.accounts.buyer_paying_token_account.to_account_info(),
+                    ctx.accounts.comptoir_paying_token_account.to_account_info(),
+                    ctx.accounts.buyer.to_account_info(),
+                    ctx.accounts.token_program.to_account_info(),
+                    comptoir_share,
+                )?;
+            }
+
+            if let Some(creators) = creators_distributions_option.as_ref(){
                 for creator in creators {
                     let creator_share = calculate_fee(creators_share, creator.1 as u16, 100);
-
-                    transfer_if_not_zero(
-                        ctx.accounts.buyer_paying_token_account.to_account_info(),
-                        creator.0.to_account_info(),
-                        ctx.accounts.buyer.to_account_info(),
-                        ctx.accounts.token_program.to_account_info(),
-                        creator_share,
-                    )?;
+                    if is_native {
+                        pay_native(
+                            ctx.accounts.buyer_paying_token_account.to_account_info(),
+                            seller_token_account.to_account_info(),
+                            ctx.accounts.system_program.to_account_info(),
+                            creator_share,
+                        )?;
+                    } else {
+                        pay_spl(
+                            ctx.accounts.buyer_paying_token_account.to_account_info(),
+                            creator.0.to_account_info(),
+                            ctx.accounts.buyer.to_account_info(),
+                            ctx.accounts.token_program.to_account_info(),
+                            creator_share,
+                        )?;
+                    }
                 }
             }
 
@@ -242,23 +280,30 @@ pub mod comptoir {
     }
 }
 
-fn transfer_if_not_zero<'info>(
+
+fn pay_native<'info>(
+    payer: AccountInfo<'info>,
+    dest: AccountInfo<'info>,
+    system_program: AccountInfo<'info>,
+    amount: u64,
+) -> ProgramResult {
+    let transfer_instruction = transfer(payer.key, dest.key, amount);
+    invoke(&transfer_instruction, &[payer, dest, system_program])
+}
+
+fn pay_spl<'info>(
     payer: AccountInfo<'info>,
     dest: AccountInfo<'info>,
     authority: AccountInfo<'info>,
     token_program: AccountInfo<'info>,
     amount: u64,
 ) -> ProgramResult {
-    if amount == 0 {
-        return Ok(())
-    }
     let cpi_accounts = Transfer {
         from: payer,
         to: dest,
         authority,
     };
     let cpi_ctx = CpiContext::new(token_program, cpi_accounts);
-
     token::transfer(cpi_ctx, amount)
 }
 
@@ -271,7 +316,6 @@ fn calculate_fee(amount: u64, fee_share: u16, basis: u64) -> u64 {
 
     return fee;
 }
-
 
 #[derive(Accounts)]
 #[instruction(nounce: u8)]
@@ -288,7 +332,7 @@ pub struct CreateComptoir<'info> {
 
     system_program: Program<'info, System>,
     token_program: Program<'info, Token>,
-    rent: Sysvar<'info, Rent>
+    rent: Sysvar<'info, Rent>,
 }
 
 #[derive(Accounts)]
@@ -299,25 +343,27 @@ pub struct UpdateComptoir<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(_nounce: u8, name: String)]
+#[instruction(_nounce: u8, symbol: String)]
 pub struct CreateCollection<'info> {
+    #[account(mut)]
     authority: Signer<'info>,
     #[account(mut, has_one = authority)]
     comptoir: Account<'info, Comptoir>,
     #[account(
     init,
     seeds = [
-    name.as_bytes(),
+    symbol.as_bytes(),
     comptoir.key().as_ref(),
     ],
     bump = _nounce,
     payer = authority,
+    space = 90,
     )]
     collection: Account<'info, Collection>,
 
     system_program: Program<'info, System>,
     token_program: Program<'info, Token>,
-    rent: Sysvar<'info, Rent>
+    rent: Sysvar<'info, Rent>,
 }
 
 #[derive(Accounts)]
@@ -331,10 +377,11 @@ pub struct UpdateCollection<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(price: u64, quantity: u64, _nounce: u8)]
-pub struct ListItem<'info> {
+#[instruction(_nounce: u8, _salt: String, _sell_order_nounce: u8)]
+pub struct CreateSellOrder<'info> {
+    #[account(mut)]
     payer: Signer<'info>,
-    #[account(owner = seller_nft_token_account.key())]
+    #[account(mut)]
     seller_nft_token_account: Account<'info, TokenAccount>,
 
     comptoir: Account<'info, Comptoir>,
@@ -352,27 +399,37 @@ pub struct ListItem<'info> {
     payer = payer,
     )]
     vault: Account<'info, TokenAccount>,
-    #[account(init, payer = payer)]
+    #[account(
+    init,
+    seeds = [
+    _salt.as_bytes(),
+    seller_nft_token_account.key().as_ref(),
+    ],
+    bump = _sell_order_nounce,
+    payer = payer,
+    )]
     sell_order: Account<'info, SellOrder>,
 
     system_program: Program<'info, System>,
     token_program: Program<'info, Token>,
-    rent: Sysvar<'info, Rent>
+    rent: Sysvar<'info, Rent>,
 }
 
 #[derive(Accounts)]
 #[instruction(_nounce: u8)]
-pub struct UnlistItem<'info> {
+pub struct RemoveSellOrder<'info> {
+    #[account(mut)]
     authority: Signer<'info>,
-    #[account(constraint = authority.key() == seller_token_account.owner)]
-    seller_token_account: Account<'info, TokenAccount>,
+    #[account(mut, constraint = authority.key() == seller_nft_token_account.owner)]
+    seller_nft_token_account: Account<'info, TokenAccount>,
     #[account(mut, has_one = authority)]
     sell_order: Account<'info, SellOrder>,
 
     #[account(
+    mut,
     seeds = [
     "vault".as_bytes(),
-    sell_order.mint.as_ref()
+    seller_nft_token_account.mint.as_ref(),
     ],
     bump = _nounce,
     )]
@@ -380,38 +437,39 @@ pub struct UnlistItem<'info> {
 
     system_program: Program<'info, System>,
     token_program: Program<'info, Token>,
-    rent: Sysvar<'info, Rent>
+    rent: Sysvar<'info, Rent>,
 }
 
 #[derive(Accounts)]
 #[instruction(_nounce: u8, mint: Pubkey)]
-pub struct BuyItemWithMint<'info> {
+pub struct Buy<'info> {
     buyer: Signer<'info>,
-    #[account(owner = buyer.key())] //are they even useful since the transfer would make the transaction fail ??
-    buyer_nft_token_account: Account<'info, TokenAccount>,
-    #[account(owner = buyer.key())]
-    buyer_paying_token_account: Account<'info, TokenAccount>,
+    #[account(mut)]
+    buyer_nft_token_account: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    buyer_paying_token_account: Box<Account<'info, TokenAccount>>,
 
     comptoir: Account<'info, Comptoir>,
-    #[account(constraint = comptoir_paying_token_account.key() == comptoir.fees_destination)]
-    comptoir_paying_token_account: Account<'info, TokenAccount>,
+    #[account(mut, constraint = comptoir_paying_token_account.key() == comptoir.fees_destination)]
+    comptoir_paying_token_account: Box<Account<'info, TokenAccount>>,
     #[account(constraint = collection.comptoir_key == comptoir.key())]
     collection: Account<'info, Collection>,
 
     mint_metadata: AccountInfo<'info>,
 
     #[account(
+    mut,
     seeds = [
     "vault".as_bytes(),
     mint.as_ref()
     ],
     bump = _nounce,
     )]
-    vault: Account<'info, TokenAccount>,
+    vault: Box<Account<'info, TokenAccount>>,
 
     system_program: Program<'info, System>,
     token_program: Program<'info, Token>,
-    rent: Sysvar<'info, Rent>
+    rent: Sysvar<'info, Rent>,
 }
 
 #[account]
@@ -434,12 +492,12 @@ pub struct SellOrder {
 }
 
 #[account]
-#[derive(Default)]
 pub struct Collection {
     comptoir_key: Pubkey,
     symbol: String,
+    // max size of 11
     required_verifier: Pubkey,
-    fee_share: Option<u16>, //Takes priority over comptoir fees
+    fees: Option<u16>, //Takes priority over comptoir fees
 }
 
 impl Collection {
@@ -448,7 +506,25 @@ impl Collection {
             metadata.data.symbol == self.symbol && creators.iter().any(|c| c.address == self.required_verifier && c.verified)
         } else {
             false
+        };
+    }
+
+    pub fn validate(&self) -> ProgramResult {
+        if let Some(fee) = self.fees {
+            if fee > 100 {
+                return Err(ErrorCode::ErrFeeShouldLowerOrEqualThan100.into());
+            }
         }
+        Ok(())
+    }
+}
+
+impl Comptoir {
+    pub fn validate(&self) -> ProgramResult {
+        if self.fees > 100 {
+            return Err(ErrorCode::ErrFeeShouldLowerOrEqualThan100.into());
+        }
+        Ok(())
     }
 }
 
@@ -473,17 +549,18 @@ pub enum ErrorCode {
 fn verify_metadata_mint(user_input_metadata_key: Pubkey, item_mint: Pubkey) -> Result<()> {
     let metadata_seeds = &[
         PREFIX.as_bytes(),
-        TOKEN_METADATA_PROGRAM,
+        TOKEN_METADATA_PROGRAM.as_ref(),
         item_mint.as_ref(),
     ];
-    let (metadata_key, _bump_seed) = Pubkey::find_program_address(metadata_seeds, &Pubkey::new(TOKEN_METADATA_PROGRAM));
+
+    let (metadata_key, _bump_seed) = Pubkey::find_program_address(metadata_seeds, &TOKEN_METADATA_PROGRAM.parse::<Pubkey>().unwrap());
     if user_input_metadata_key != metadata_key {
         return Err(ErrorCode::ErrMetaDataMintDoesNotMatchItemMint.into());
     }
 
-    return Ok(())
+    return Ok(());
 }
 
 pub mod constant {
-    pub const TOKEN_METADATA_PROGRAM: &[u8] = b"metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s";
+    pub const TOKEN_METADATA_PROGRAM: &str = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s";
 }

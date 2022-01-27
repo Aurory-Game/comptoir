@@ -1,5 +1,6 @@
 .idea
 node_modules
+dependencies
 .anchor
 .DS_Store
 target
