@@ -4,7 +4,8 @@ use anchor_lang::prelude::*;
 use anchor_lang::AccountsClose;
 use anchor_lang::solana_program::program::invoke;
 use metaplex_token_metadata::state::{Metadata, PREFIX};
-use crate::constant::TOKEN_METADATA_PROGRAM;
+use std::str::FromStr;
+use crate::constant::{TOKEN_METADATA_PROGRAM, ASSOCIATED_TOKEN_PROGRAM};
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
@@ -149,10 +150,10 @@ pub mod comptoir {
         ctx.accounts.collection.is_part_of_collection(&metadata);
         let mut index = 0;
 
-
         //verify creators and use associated token account if mint isnt native
         let creators_distributions_option: Option<Vec<(&AccountInfo, u8)>> = None;
         if let Some(creators) = metadata.data.creators {
+            index = creators.len();
             let mut creators_distributions = Vec::new();
             for i in 0..creators.len() {
                 let remaining_account_creator = &ctx.remaining_accounts[i];
@@ -161,11 +162,12 @@ pub mod comptoir {
                     creators_distributions.push((remaining_account_creator, creators[i].share));
                 } else {
                     let ata_seeds = &[
-                        remaining_account_creator.key.as_ref(),
+                        creators[i].address.as_ref(),
                         ctx.accounts.token_program.key.as_ref(),
                         ctx.accounts.comptoir.mint.as_ref(),
                     ];
-                    let creator_associated_token_addr = Pubkey::find_program_address(ata_seeds, &Pubkey::new("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL".as_bytes()));
+                    let atp = Pubkey::from_str(ASSOCIATED_TOKEN_PROGRAM).unwrap();
+                    let creator_associated_token_addr = Pubkey::find_program_address(ata_seeds, &atp);
                     assert_eq!(remaining_account_creator.key(), creator_associated_token_addr.0);
                     creators_distributions.push((remaining_account_creator, creators[i].share));
                 }
@@ -563,4 +565,5 @@ fn verify_metadata_mint(user_input_metadata_key: Pubkey, item_mint: Pubkey) -> R
 
 pub mod constant {
     pub const TOKEN_METADATA_PROGRAM: &str = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s";
+    pub const ASSOCIATED_TOKEN_PROGRAM: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
 }

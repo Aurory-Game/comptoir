@@ -265,7 +265,7 @@ describe('comptoir', () => {
 
     it('create sell order', async () => {
         let price = new anchor.BN(1000);
-        let quantity = new anchor.BN(2);
+        let quantity = new anchor.BN(4);
 
         await program.rpc.createSellOrder(
             programNftVaultDump, "salt", sellOrderDump, price, quantity, adminTokenAccount.address, {
@@ -291,7 +291,7 @@ describe('comptoir', () => {
         assert.equal(sellOrder.authority.toString(), admin.publicKey.toString());
         assert.equal(sellOrder.destination.toString(), adminTokenAccount.address.toString());
         let accountAfterSellOrderCreate = await nftMint.getAccountInfo(adminNftAssociatedTokenAccount)
-        assert.equal(accountAfterSellOrderCreate.amount, 3);
+        assert.equal(accountAfterSellOrderCreate.amount, 1);
     });
 
     it('remove one item from sell order', async () => {
@@ -313,9 +313,9 @@ describe('comptoir', () => {
         );
 
         let sellOrder = await program.account.sellOrder.fetch(sellOrderPDA)
-        assert.equal(sellOrder.quantity.toNumber(), 1);
+        assert.equal(sellOrder.quantity.toNumber(), 3);
         let updatedAccount = await nftMint.getAccountInfo(adminNftAssociatedTokenAccount)
-        assert.equal(updatedAccount.amount, 4);
+        assert.equal(updatedAccount.amount, 2);
     });
 
     it('buy the nft', async () => {
@@ -332,9 +332,6 @@ describe('comptoir', () => {
         let quantity_to_buy = new anchor.BN(1)
         let max_price = new anchor.BN(1000)
 
-        console.log(admin.publicKey.toString());
-        console.log(sellOrderPDA.toString())
-        console.log(adminTokenAccount.address.toString())
 
         await program.rpc.buy(
             programNftVaultDump, nftMint.publicKey, quantity_to_buy, max_price, {
@@ -353,7 +350,7 @@ describe('comptoir', () => {
                 },
                 signers: [buyer],
                 remainingAccounts: [
-                    { pubkey: admin.publicKey, isWritable: true, isSigner: false },
+                    { pubkey: adminTokenAccount.address, isWritable: true, isSigner: false },
                     { pubkey: sellOrderPDA, isWritable: true, isSigner: false },
                     { pubkey: adminTokenAccount.address, isWritable: true, isSigner: false },
                 ]
@@ -361,10 +358,6 @@ describe('comptoir', () => {
         );
 
         let sellOrder = await program.account.sellOrder.fetch(sellOrderPDA)
-        assert.equal(sellOrder.quantity.toNumber(), 1);
-        let updatedAccount = await nftMint.getAccountInfo(adminNftAssociatedTokenAccount)
-        assert.equal(updatedAccount.amount, 4);
+        assert.equal(sellOrder.quantity.toNumber(), 2);
     });
-
-
 });
