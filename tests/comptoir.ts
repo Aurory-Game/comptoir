@@ -327,11 +327,12 @@ describe('comptoir', () => {
         await provider.connection.confirmTransaction(fromAirdropSignature);
         let buyerNftAta = await nftMint.getOrCreateAssociatedAccountInfo(buyer.publicKey)
         let buyerComptoirAta = await comptoirMint.getOrCreateAssociatedAccountInfo(buyer.publicKey)
-        await comptoirMint.mintTo(buyerComptoirAta.address, admin, [], 10000)
+        await comptoirMint.mintTo(buyerComptoirAta.address, admin, [], 1000)
 
         let quantity_to_buy = new anchor.BN(1)
         let max_price = new anchor.BN(1000)
 
+        let beforeAdminMint = await comptoirMint.getAccountInfo(adminTokenAccount.address)
 
         await program.rpc.buy(
             programNftVaultDump, nftMint.publicKey, quantity_to_buy, max_price, {
@@ -359,5 +360,8 @@ describe('comptoir', () => {
 
         let sellOrder = await program.account.sellOrder.fetch(sellOrderPDA)
         assert.equal(sellOrder.quantity.toNumber(), 2);
+
+        let updatedAdminTokenAccount = await comptoirMint.getAccountInfo(adminTokenAccount.address)
+        assert.equal(updatedAdminTokenAccount.amount.toNumber(), 1010);
     });
 });

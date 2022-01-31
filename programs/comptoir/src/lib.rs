@@ -151,7 +151,7 @@ pub mod comptoir {
         let mut index = 0;
 
         //verify creators and use associated token account if mint isnt native
-        let creators_distributions_option: Option<Vec<(&AccountInfo, u8)>> = None;
+        let mut creators_distributions_option: Option<Vec<(&AccountInfo, u8)>> = None;
         if let Some(creators) = metadata.data.creators {
             index = creators.len();
             let mut creators_distributions = Vec::new();
@@ -172,6 +172,7 @@ pub mod comptoir {
                     creators_distributions.push((remaining_account_creator, creators[i].share));
                 }
             }
+            creators_distributions_option = Some(creators_distributions);
         }
 
         let mut comptoir_fee = ctx.accounts.comptoir.fees;
@@ -496,8 +497,7 @@ pub struct SellOrder {
 #[account]
 pub struct Collection {
     comptoir_key: Pubkey,
-    symbol: String,
-    // max size of 11
+    symbol: String, // max size of 11
     required_verifier: Pubkey,
     fees: Option<u16>, //Takes priority over comptoir fees
 }
