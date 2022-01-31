@@ -19,6 +19,10 @@ describe('comptoir', () => {
 
     let admin: web3.Keypair;
     let adminTokenAccount: splToken.AccountInfo;
+    let creator: web3.Keypair;
+    let creatorTokenAccount: splToken.AccountInfo;
+    let seller: web3.Keypair;
+    let sellerTokenAccount: splToken.AccountInfo;
     let comptoirPDA: web3.PublicKey;
     let comptoirDump: number;
     let comptoirMint: splToken.Token;
@@ -29,8 +33,7 @@ describe('comptoir', () => {
     let collectionFee = new anchor.BN(5);
     let nftMint: splToken.Token;
     let metadataPDA: web3.PublicKey;
-    let creatorAddr: web3.PublicKey;
-    let adminNftAssociatedTokenAccount: web3.PublicKey;
+    let sellerNftAssociatedTokenAccount: web3.PublicKey;
     let programNftVaultPDA: web3.PublicKey;
     let programNftVaultDump: number
     let sellOrderPDA: web3.PublicKey;
@@ -41,7 +44,21 @@ describe('comptoir', () => {
         let fromAirdropSignature = await provider.connection.requestAirdrop(
             admin.publicKey,
             anchor.web3.LAMPORTS_PER_SOL,
-        )
+        );
+        await provider.connection.confirmTransaction(fromAirdropSignature);
+
+        creator = anchor.web3.Keypair.generate()
+        fromAirdropSignature = await provider.connection.requestAirdrop(
+            creator.publicKey,
+            anchor.web3.LAMPORTS_PER_SOL,
+        );
+        await provider.connection.confirmTransaction(fromAirdropSignature);
+
+        seller = anchor.web3.Keypair.generate()
+        fromAirdropSignature = await provider.connection.requestAirdrop(
+            seller.publicKey,
+            anchor.web3.LAMPORTS_PER_SOL,
+        );
         await provider.connection.confirmTransaction(fromAirdropSignature);
 
         [comptoirPDA, comptoirDump] = await anchor.web3.PublicKey.findProgramAddress(
@@ -61,37 +78,41 @@ describe('comptoir', () => {
         adminTokenAccount = await comptoirMint.getOrCreateAssociatedAccountInfo(
             admin.publicKey,
         );
-
-        await comptoirMint.mintTo(adminTokenAccount.address, admin, [], 10);
+        creatorTokenAccount = await comptoirMint.getOrCreateAssociatedAccountInfo(
+            creator.publicKey,
+        );
+        sellerTokenAccount = await comptoirMint.getOrCreateAssociatedAccountInfo(
+            seller.publicKey,
+        );
 
         [collectionPDA, collectionDump] = await anchor.web3.PublicKey.findProgramAddress(
             [Buffer.from(collectionName), comptoirPDA.toBuffer()],
             program.programId,
         );
 
-        const data = nft_data(admin.publicKey);
+        const data = nft_data(creator.publicKey);
         const json_url = nft_json_url;
         const lamports = await Token.getMinBalanceRentForExemptMint(
             provider.connection
         );
         const [mint, metadataAddr, tx] = await createMint(
-            admin.publicKey,
-            admin.publicKey,
+            creator.publicKey,
+            seller.publicKey,
             lamports,
             data,
             json_url
         );
-        const signers = [mint, admin];
+        const signers = [mint, creator];
         await provider.send(tx, signers);
 
         metadataPDA = metadataAddr
         nftMint = new Token(provider.connection, mint.publicKey, TOKEN_PROGRAM_ID, admin)
 
-        adminNftAssociatedTokenAccount = await Token.getAssociatedTokenAddress(
+        sellerNftAssociatedTokenAccount = await Token.getAssociatedTokenAddress(
             ASSOCIATED_TOKEN_PROGRAM_ID,
             TOKEN_PROGRAM_ID,
             nftMint.publicKey,
-            admin.publicKey
+            seller.publicKey
         );
 
         [programNftVaultPDA, programNftVaultDump] = await anchor.web3.PublicKey.findProgramAddress(
@@ -99,7 +120,7 @@ describe('comptoir', () => {
             program.programId,
         );
         [sellOrderPDA, sellOrderDump] = await anchor.web3.PublicKey.findProgramAddress(
-            [Buffer.from("salt"), adminNftAssociatedTokenAccount.toBuffer()],
+            [Buffer.from("salt"), sellerNftAssociatedTokenAccount.toBuffer()],
             program.programId,
         );
     });
@@ -196,7 +217,7 @@ describe('comptoir', () => {
 
     it('create collection', async () => {
         await program.rpc.createCollection(
-            collectionDump, collectionName, admin.publicKey, collectionFee, {
+            collectionDump, collectionName, creator.publicKey, collectionFee, {
                 accounts: {
                     authority: admin.publicKey,
                     comptoir: comptoirPDA,
@@ -209,7 +230,7 @@ describe('comptoir', () => {
             });
         let createdCollection = await program.account.collection.fetch(collectionPDA)
         assert.equal(createdCollection.comptoirKey.toString(), comptoirPDA.toString());
-        assert.equal(createdCollection.requiredVerifier.toString(), admin.publicKey.toString());
+        assert.equal(createdCollection.requiredVerifier.toString(), creator.publicKey.toString());
         assert.equal(createdCollection.symbol.toString(), collectionName);
         assert.equal(createdCollection.fees.toString(), collectionFee.toString());
     });
@@ -253,7 +274,7 @@ describe('comptoir', () => {
 
         // reset
         await program.rpc.updateCollection(
-            collectionFee, collectionName, admin.publicKey, {
+            collectionFee, collectionName, creator.publicKey, {
                 accounts: {
                     authority: admin.publicKey,
                     comptoir: comptoirPDA,
@@ -268,10 +289,10 @@ describe('comptoir', () => {
         let quantity = new anchor.BN(4);
 
         await program.rpc.createSellOrder(
-            programNftVaultDump, "salt", sellOrderDump, price, quantity, adminTokenAccount.address, {
+            programNftVaultDump, "salt", sellOrderDump, price, quantity, sellerTokenAccount.address, {
                 accounts: {
-                    payer: admin.publicKey,
-                    sellerNftTokenAccount: adminNftAssociatedTokenAccount,
+                    payer: seller.publicKey,
+                    sellerNftTokenAccount: sellerNftAssociatedTokenAccount,
                     comptoir: comptoirPDA,
                     mint: nftMint.publicKey,
                     vault: programNftVaultPDA,
@@ -280,7 +301,7 @@ describe('comptoir', () => {
                     tokenProgram: TOKEN_PROGRAM_ID,
                     rent: anchor.web3.SYSVAR_RENT_PUBKEY,
                 },
-                signers: [admin]
+                signers: [seller]
             }
         );
 
@@ -288,9 +309,9 @@ describe('comptoir', () => {
         assert.equal(sellOrder.price.toString(), price.toString());
         assert.equal(sellOrder.quantity.toString(), quantity.toString());
         assert.equal(sellOrder.mint.toString(), nftMint.publicKey.toString());
-        assert.equal(sellOrder.authority.toString(), admin.publicKey.toString());
-        assert.equal(sellOrder.destination.toString(), adminTokenAccount.address.toString());
-        let accountAfterSellOrderCreate = await nftMint.getAccountInfo(adminNftAssociatedTokenAccount)
+        assert.equal(sellOrder.authority.toString(), seller.publicKey.toString());
+        assert.equal(sellOrder.destination.toString(), sellerTokenAccount.address.toString());
+        let accountAfterSellOrderCreate = await nftMint.getAccountInfo(sellerNftAssociatedTokenAccount)
         assert.equal(accountAfterSellOrderCreate.amount, 1);
     });
 
@@ -300,21 +321,21 @@ describe('comptoir', () => {
         await program.rpc.removeSellOrder(
             programNftVaultDump, quantity, {
                 accounts: {
-                    authority: admin.publicKey,
-                    sellerNftTokenAccount: adminNftAssociatedTokenAccount,
+                    authority: seller.publicKey,
+                    sellerNftTokenAccount: sellerNftAssociatedTokenAccount,
                     vault: programNftVaultPDA,
                     sellOrder: sellOrderPDA,
                     systemProgram: anchor.web3.SystemProgram.programId,
                     tokenProgram: TOKEN_PROGRAM_ID,
                     rent: anchor.web3.SYSVAR_RENT_PUBKEY,
                 },
-                signers: [admin]
+                signers: [seller]
             }
         );
 
         let sellOrder = await program.account.sellOrder.fetch(sellOrderPDA)
         assert.equal(sellOrder.quantity.toNumber(), 3);
-        let updatedAccount = await nftMint.getAccountInfo(adminNftAssociatedTokenAccount)
+        let updatedAccount = await nftMint.getAccountInfo(sellerNftAssociatedTokenAccount)
         assert.equal(updatedAccount.amount, 2);
     });
 
@@ -331,8 +352,6 @@ describe('comptoir', () => {
 
         let quantity_to_buy = new anchor.BN(1)
         let max_price = new anchor.BN(1000)
-
-        let beforeAdminMint = await comptoirMint.getAccountInfo(adminTokenAccount.address)
 
         await program.rpc.buy(
             programNftVaultDump, nftMint.publicKey, quantity_to_buy, max_price, {
@@ -351,9 +370,9 @@ describe('comptoir', () => {
                 },
                 signers: [buyer],
                 remainingAccounts: [
-                    { pubkey: adminTokenAccount.address, isWritable: true, isSigner: false },
+                    { pubkey: creatorTokenAccount.address, isWritable: true, isSigner: false },
                     { pubkey: sellOrderPDA, isWritable: true, isSigner: false },
-                    { pubkey: adminTokenAccount.address, isWritable: true, isSigner: false },
+                    { pubkey: sellerTokenAccount.address, isWritable: true, isSigner: false },
                 ]
             }
         );
@@ -362,6 +381,13 @@ describe('comptoir', () => {
         assert.equal(sellOrder.quantity.toNumber(), 2);
 
         let updatedAdminTokenAccount = await comptoirMint.getAccountInfo(adminTokenAccount.address)
-        assert.equal(updatedAdminTokenAccount.amount.toNumber(), 1010);
+        assert.equal(updatedAdminTokenAccount.amount.toNumber(), 50);
+
+        let updatedSellerTokenAccount = await comptoirMint.getAccountInfo(sellerTokenAccount.address)
+        assert.equal(updatedSellerTokenAccount.amount.toNumber(), 850);
+
+        let updatedCreatorTokenAccount = await comptoirMint.getAccountInfo(creatorTokenAccount.address)
+        assert.equal(updatedCreatorTokenAccount.amount.toNumber(), 100);
     });
+
 });

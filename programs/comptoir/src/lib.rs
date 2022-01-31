@@ -217,7 +217,7 @@ pub mod comptoir {
             assert_eq!(seller_token_account.key(), sell_order.destination);
             let total_amount = sell_order.price.checked_mul(to_buy).unwrap();
             let creators_share = calculate_fee(total_amount, metadata.data.seller_fee_basis_points, 10000);
-            let comptoir_share = calculate_fee(total_amount, comptoir_fee, 10000);
+            let comptoir_share = calculate_fee(total_amount, comptoir_fee, 100);
             let seller_share = total_amount.checked_sub(creators_share).unwrap().checked_sub(comptoir_share).unwrap();
 
             if is_native {
