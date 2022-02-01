@@ -143,7 +143,7 @@ pub mod comptoir {
         ctx: Context<'a, 'b, 'c, 'info, Buy<'info>>,
         nounce: u8, asset_mint: Pubkey, ask_quantity: u64, max_price: u64,
     ) -> ProgramResult {
-        //verify_metadata_mint(ctx.accounts.mint_metadata.key(), mint)?; TODO use
+        verify_metadata_mint(ctx.accounts.mint_metadata.key(), asset_mint)?;
         let is_native = ctx.accounts.comptoir.mint.key() == spl_token::native_mint::id();
 
         let metadata = Metadata::from_account_info(ctx.accounts.mint_metadata.as_ref())?;
@@ -549,13 +549,14 @@ pub enum ErrorCode {
 }
 
 fn verify_metadata_mint(user_input_metadata_key: Pubkey, item_mint: Pubkey) -> Result<()> {
+    let tmp = Pubkey::from_str(TOKEN_METADATA_PROGRAM).unwrap();
     let metadata_seeds = &[
         PREFIX.as_bytes(),
-        TOKEN_METADATA_PROGRAM.as_ref(),
+        tmp.as_ref(),
         item_mint.as_ref(),
     ];
 
-    let (metadata_key, _bump_seed) = Pubkey::find_program_address(metadata_seeds, &TOKEN_METADATA_PROGRAM.parse::<Pubkey>().unwrap());
+    let (metadata_key, _bump_seed) = Pubkey::find_program_address(metadata_seeds, &tmp);
     if user_input_metadata_key != metadata_key {
         return Err(ErrorCode::ErrMetaDataMintDoesNotMatchItemMint.into());
     }
