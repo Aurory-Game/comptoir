@@ -227,6 +227,13 @@ pub mod comptoir {
                     ctx.accounts.system_program.to_account_info(),
                     seller_share,
                 )?;
+
+                pay_native(
+                    ctx.accounts.buyer_paying_token_account.to_account_info(),
+                    ctx.accounts.comptoir_dest_account.to_account_info(),
+                    ctx.accounts.system_program.to_account_info(),
+                    comptoir_share,
+                )?;
             } else {
                 pay_spl(
                     ctx.accounts.buyer_paying_token_account.to_account_info(),
@@ -238,7 +245,7 @@ pub mod comptoir {
 
                 pay_spl(
                     ctx.accounts.buyer_paying_token_account.to_account_info(),
-                    ctx.accounts.comptoir_paying_token_account.to_account_info(),
+                    ctx.accounts.comptoir_dest_account.to_account_info(),
                     ctx.accounts.buyer.to_account_info(),
                     ctx.accounts.token_program.to_account_info(),
                     comptoir_share,
@@ -251,7 +258,7 @@ pub mod comptoir {
                     if is_native {
                         pay_native(
                             ctx.accounts.buyer_paying_token_account.to_account_info(),
-                            seller_token_account.to_account_info(),
+                            creator.0.to_account_info(),
                             ctx.accounts.system_program.to_account_info(),
                             creator_share,
                         )?;
@@ -450,11 +457,11 @@ pub struct Buy<'info> {
     #[account(mut)]
     buyer_nft_token_account: Box<Account<'info, TokenAccount>>,
     #[account(mut)]
-    buyer_paying_token_account: Box<Account<'info, TokenAccount>>,
+    buyer_paying_token_account: UncheckedAccount<'info>,
 
     comptoir: Account<'info, Comptoir>,
-    #[account(mut, constraint = comptoir_paying_token_account.key() == comptoir.fees_destination)]
-    comptoir_paying_token_account: Box<Account<'info, TokenAccount>>,
+    #[account(mut, constraint = comptoir_dest_account.key() == comptoir.fees_destination)]
+    comptoir_dest_account: UncheckedAccount<'info>,
     #[account(constraint = collection.comptoir_key == comptoir.key())]
     collection: Account<'info, Collection>,
 
@@ -472,7 +479,6 @@ pub struct Buy<'info> {
 
     system_program: Program<'info, System>,
     token_program: Program<'info, Token>,
-    rent: Sysvar<'info, Rent>,
 }
 
 #[account]
