@@ -212,7 +212,7 @@ describe('comptoir with sol', () => {
         let buyerDestBeforeBalance = (await provider.connection.getAccountInfo(buyer.publicKey)).lamports
 
         await program.rpc.buy(
-            programNftVaultDump, nftMint.publicKey, quantity_to_buy, max_price, {
+            programNftVaultDump, quantity_to_buy, max_price, {
                 accounts: {
                     buyer: buyer.publicKey,
                     buyerNftTokenAccount: buyerNftAta.address,

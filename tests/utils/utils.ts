@@ -71,7 +71,7 @@ export async function createMint(
     const metadataPDA = await Metadata.getPDA(mint.publicKey);
     const metadataData = new MetadataDataData({
         name: data.name,
-        symbol: '',
+        symbol: 'AURY',
         uri: json_url,
         sellerFeeBasisPoints: data.seller_fee_basis_points,
         creators: [

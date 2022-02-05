@@ -5,7 +5,8 @@ use anchor_lang::AccountsClose;
 use anchor_lang::solana_program::program::invoke;
 use metaplex_token_metadata::state::{Metadata, PREFIX};
 use std::str::FromStr;
-use crate::constant::{TOKEN_METADATA_PROGRAM, ASSOCIATED_TOKEN_PROGRAM};
+use metaplex_token_metadata::utils::assert_derivation;
+use crate::constant::{ASSOCIATED_TOKEN_PROGRAM};
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
@@ -141,13 +142,15 @@ pub mod comptoir {
 
     pub fn buy<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, Buy<'info>>,
-        nounce: u8, asset_mint: Pubkey, ask_quantity: u64, max_price: u64,
+        nounce: u8, ask_quantity: u64, max_price: u64,
     ) -> ProgramResult {
-        verify_metadata_mint(ctx.accounts.mint_metadata.key(), asset_mint)?;
         let is_native = ctx.accounts.comptoir.mint.key() == spl_token::native_mint::id();
 
-        let metadata = Metadata::from_account_info(ctx.accounts.mint_metadata.as_ref())?;
-        ctx.accounts.collection.is_part_of_collection(&metadata);
+        let metadata = verify_metadata(
+            ctx.accounts.mint_metadata.as_ref(),
+            &ctx.accounts.buyer_nft_token_account.mint.key(),
+            &ctx.accounts.collection,
+        )?;
         let mut index = 0;
 
         //verify creators and use associated token account if mint isnt native
@@ -182,7 +185,7 @@ pub mod comptoir {
 
         let seeds = &[
             "vault".as_bytes(),
-            asset_mint.as_ref(),
+            ctx.accounts.buyer_nft_token_account.mint.as_ref(),
             &[nounce], ];
         let signer = &[&seeds[..]];
 
@@ -191,7 +194,7 @@ pub mod comptoir {
         while index < ctx.remaining_accounts.len() {
             let mut sell_order: Account<'info, SellOrder> = Account::<'info, SellOrder>::try_from(&ctx.remaining_accounts[index])?;
             index = index + 1;
-            assert_eq!(sell_order.mint, asset_mint);
+            assert_eq!(sell_order.mint,  ctx.accounts.buyer_nft_token_account.mint.key());
 
             if sell_order.price > max_price {
                 return Err(ErrorCode::ErrItemPriceHigherThanMaxPrice.into());
@@ -451,7 +454,7 @@ pub struct RemoveSellOrder<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(_nounce: u8, mint: Pubkey)]
+#[instruction(_nounce: u8)]
 pub struct Buy<'info> {
     buyer: Signer<'info>,
     #[account(mut)]
@@ -471,7 +474,7 @@ pub struct Buy<'info> {
     mut,
     seeds = [
     "vault".as_bytes(),
-    mint.as_ref()
+    buyer_nft_token_account.mint.as_ref()
     ],
     bump = _nounce,
     )]
@@ -511,7 +514,8 @@ pub struct Collection {
 impl Collection {
     pub fn is_part_of_collection(&self, metadata: &Metadata) -> bool {
         return if let Some(creators) = metadata.data.creators.as_ref() {
-            metadata.data.symbol == self.symbol && creators.iter().any(|c| c.address == self.required_verifier && c.verified)
+            metadata.data.symbol.starts_with(&self.symbol.to_string())
+                && creators.iter().any(|c| c.address == self.required_verifier && c.verified)
         } else {
             false
         };
@@ -552,23 +556,27 @@ pub enum ErrorCode {
     ErrComptoirDoesNotAcceptSol,
     #[msg("metadata mint does not match item mint")]
     ErrMetaDataMintDoesNotMatchItemMint,
+    #[msg("nft not part of collection")]
+    ErrNftNotPartOfCollection,
 }
 
-fn verify_metadata_mint(user_input_metadata_key: Pubkey, item_mint: Pubkey) -> Result<()> {
-    let tmp = Pubkey::from_str(TOKEN_METADATA_PROGRAM).unwrap();
-    let metadata_seeds = &[
-        PREFIX.as_bytes(),
-        tmp.as_ref(),
-        item_mint.as_ref(),
-    ];
-
-    let (metadata_key, _bump_seed) = Pubkey::find_program_address(metadata_seeds, &tmp);
-    if user_input_metadata_key != metadata_key {
-        return Err(ErrorCode::ErrMetaDataMintDoesNotMatchItemMint.into());
+fn verify_metadata(metadata_key: &AccountInfo, nft_mint: &Pubkey, collection: &Collection) -> Result<Metadata> {
+    assert_derivation(
+        &metaplex_token_metadata::id(),
+        metadata_key,
+        &[
+            PREFIX.as_bytes(),
+            metaplex_token_metadata::id().as_ref(),
+            nft_mint.as_ref(),
+        ],
+    )?;
+    let metadata = Metadata::from_account_info(metadata_key)?;
+    if !collection.is_part_of_collection(&metadata) {
+        return Err(ErrorCode::ErrNftNotPartOfCollection.into());
     }
-
-    return Ok(());
+    return Ok(metadata)
 }
+
 
 pub mod constant {
     pub const TOKEN_METADATA_PROGRAM: &str = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s";
