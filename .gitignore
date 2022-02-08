@@ -1,0 +1,8 @@
+.idea
+node_modules
+dependencies
+.anchor
+.DS_Store
+target
+**/*.rs.bk
+comptoir/node_modules
