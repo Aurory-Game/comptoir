@@ -6,6 +6,7 @@ use anchor_spl::token;
 use anchor_spl::token::Transfer;
 use spl_token::solana_program::program::invoke_signed;
 use crate::ErrorCode::ErrWrongTransferProgram;
+use crate::msg;
 
 
 pub fn pay<'info>(
@@ -16,9 +17,9 @@ pub fn pay<'info>(
     amount: u64,
 ) -> ProgramResult {
     if program.key() == anchor_lang::solana_program::system_program::ID {
-        pay_native(payer, dest, program, amount)?
+        return pay_native(payer, dest, program, amount)
     } else if program.key() == spl_token::ID {
-        pay_spl(payer, dest, authority, program, amount)?
+        return pay_spl(payer, dest, authority, program, amount)
     }
     return Err(ErrWrongTransferProgram.into())
 }
@@ -59,9 +60,9 @@ pub fn pay_with_signer<'info>(
     signer: &[&[&[u8]]]
 ) -> ProgramResult {
     if program.key() == anchor_lang::solana_program::system_program::ID {
-        pay_native_with_signer(payer, dest, program, amount, signer)?
+        return pay_native_with_signer(payer, dest, program, amount, signer)
     } else if program.key() == spl_token::ID {
-        pay_spl_with_signer(payer, dest, authority, program, amount, signer)?
+        return pay_spl_with_signer(payer, dest, authority, program, amount, signer)
     }
     return Err(ErrWrongTransferProgram.into())
 }

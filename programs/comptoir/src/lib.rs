@@ -6,6 +6,7 @@ use anchor_lang::AccountsClose;
 use metaplex_token_metadata::state::PREFIX as METAPLEX_PREFIX;
 use metaplex_token_metadata::state::{Creator, Metadata};
 use std::str::FromStr;
+use anchor_spl::associated_token::AssociatedToken;
 use metaplex_token_metadata::utils::{assert_derivation, assert_owned_by};
 use crate::constant::{ASSOCIATED_TOKEN_PROGRAM};
 use crate::constant::{PREFIX, ESCROW};
@@ -216,14 +217,14 @@ pub mod comptoir {
             pay(
                 ctx.accounts.buyer_paying_token_account.to_account_info(),
                 seller_token_account.to_account_info(),
-                ctx.accounts.buyer_paying_token_account.to_account_info(),
+                ctx.accounts.buyer.to_account_info(),
                 transfer_program.to_account_info(),
                 seller_share,
             )?;
             pay(
                 ctx.accounts.buyer_paying_token_account.to_account_info(),
                 ctx.accounts.comptoir_dest_account.to_account_info(),
-                ctx.accounts.buyer_paying_token_account.to_account_info(),
+                ctx.accounts.buyer.to_account_info(),
                 transfer_program.to_account_info(),
                 comptoir_share,
             )?;
@@ -234,7 +235,7 @@ pub mod comptoir {
                     pay(
                         ctx.accounts.buyer_paying_token_account.to_account_info(),
                         creator.0.to_account_info(),
-                        ctx.accounts.buyer_paying_token_account.to_account_info(),
+                        ctx.accounts.buyer.to_account_info(),
                         transfer_program.to_account_info(),
                         creator_share,
                     )?;
@@ -264,16 +265,18 @@ pub mod comptoir {
             ctx.accounts.token_program.to_account_info()
         };
 
-        verify_metadata(
-            ctx.accounts.mint_metadata.as_ref(),
+        verify_metadata_and_derivation(
+            ctx.accounts.metadata.as_ref(),
+            &ctx.accounts.nft_mint.key(),
             &ctx.accounts.collection,
         )?;
 
         let buy_offer = &mut ctx.accounts.buy_offer;
-        buy_offer.metadata_key = ctx.accounts.mint_metadata.key();
+        buy_offer.metadata = ctx.accounts.metadata.key();
         buy_offer.authority = ctx.accounts.payer.key();
         buy_offer.proposed_price = price_proposition;
-        buy_offer.comptoir_key = ctx.accounts.comptoir.key();
+        buy_offer.comptoir = ctx.accounts.comptoir.key();
+        buy_offer.destination = ctx.accounts.buyer_nft_account.key();
 
         pay(
             ctx.accounts.buyer_paying_account.to_account_info(),
@@ -313,19 +316,31 @@ pub mod comptoir {
         Ok(())
     }
 
-    pub fn execute_offer<'a, 'b, 'c, 'info>(ctx: Context<'a, 'b, 'c, 'info, ExecuteOffer<'info>>, _nounce: u8) -> ProgramResult {
+    pub fn execute_offer<'a, 'b, 'c, 'info>(ctx: Context<'a, 'b, 'c, 'info, ExecuteOffer<'info>>, nounce: u8) -> ProgramResult {
         let is_native = ctx.accounts.comptoir.mint.key() == spl_token::native_mint::id();
+        let transfer_program = if is_native {
+            ctx.accounts.system_program.to_account_info()
+        } else {
+            ctx.accounts.token_program.to_account_info()
+        };
 
         let metadata = verify_metadata_and_derivation(
-            ctx.accounts.mint_metadata.as_ref(),
-            &ctx.accounts.seller_nft_account.mint.key(),
+            &ctx.accounts.metadata,
+            &ctx.accounts.seller_nft_account.mint,
             &ctx.accounts.collection,
         )?;
-        let mut index = 0;
+
+        //Transfer NFT to buyer
+        pay(
+            ctx.accounts.seller_nft_account.to_account_info(),
+        ctx.accounts.destination.to_account_info(),
+            ctx.accounts.seller.to_account_info(),
+            ctx.accounts.token_program.to_account_info(),
+            1
+        )?;
 
         let mut creators_distributions_option: Option<Vec<(&AccountInfo, u8)>> = None;
         if let Some(creators) = metadata.data.creators {
-            index = creators.len();
             let creators_distributions = verify_and_get_creators(creators, ctx.remaining_accounts, ctx.accounts.comptoir.mint);
             creators_distributions_option = Some(creators_distributions);
         }
@@ -334,6 +349,54 @@ pub mod comptoir {
         if let Some(collection_share) = ctx.accounts.collection.fees {
             comptoir_fee = collection_share;
         }
+
+
+        let total_amount = ctx.accounts.buy_offer.proposed_price;
+        let creators_share = calculate_fee(total_amount, metadata.data.seller_fee_basis_points, 10000);
+        let comptoir_share = calculate_fee(total_amount, comptoir_fee, 100);
+        let seller_share = total_amount.checked_sub(creators_share).unwrap().checked_sub(comptoir_share).unwrap();
+
+
+        let seeds = &[
+            PREFIX.as_bytes(),
+            ctx.accounts.comptoir.to_account_info().key.as_ref(),
+            ctx.accounts.comptoir.mint.as_ref(),
+            ESCROW.as_bytes(),
+            &[nounce], ];
+        let signer: &[&[&[u8]]] = &[&seeds[..]];
+
+        if let Some(creators) = creators_distributions_option.as_ref() {
+            for creator in creators {
+                let creator_share = calculate_fee(creators_share, creator.1 as u16, 100);
+                pay_with_signer(
+                    ctx.accounts.escrow.to_account_info(),
+                    creator.0.to_account_info(),
+                    ctx.accounts.escrow.to_account_info(),
+                    transfer_program.to_account_info(),
+                    creator_share,
+                    signer
+                )?;
+            }
+        }
+
+        pay_with_signer(
+            ctx.accounts.escrow.to_account_info(),
+            ctx.accounts.comptoir_dest_account.to_account_info(),
+            ctx.accounts.escrow.to_account_info(),
+            transfer_program.to_account_info(),
+            comptoir_share,
+            signer,
+        )?;
+
+        pay_with_signer(
+            ctx.accounts.escrow.to_account_info(),
+            ctx.accounts.seller_funds_dest_account.to_account_info(),
+            ctx.accounts.escrow.to_account_info(),
+            transfer_program.to_account_info(),
+            seller_share,
+            signer,
+        )?;
+
 
         Ok(())
     }
@@ -345,7 +408,8 @@ pub struct CreateBuyOffer<'info> {
     #[account(mut)]
     payer: Signer<'info>,
 
-    mint_metadata: UncheckedAccount<'info>,
+    nft_mint: Account<'info, Mint>,
+    metadata: UncheckedAccount<'info>, //metaplex metadata account
 
     comptoir: Account<'info, Comptoir>,
     #[account(mut, constraint = collection.comptoir_key == comptoir.key())]
@@ -365,13 +429,21 @@ pub struct CreateBuyOffer<'info> {
     #[account(mut, owner = payer.key())]
     buyer_paying_account: UncheckedAccount<'info>,
     #[account(
+    init_if_needed,
+    payer = payer,
+    associated_token::mint = nft_mint,
+    associated_token::authority = payer,
+    )]
+    buyer_nft_account: Account<'info, TokenAccount>,
+
+    #[account(
     init,
     seeds = [
     PREFIX.as_bytes(),
     comptoir.key().as_ref(),
     payer.key.as_ref(),
-    & price_proposition.to_ne_bytes(),
-    mint_metadata.key.as_ref(),
+    &price_proposition.to_ne_bytes(),
+    metadata.key.as_ref(),
     ],
     bump = buy_offer_nounce,
     payer = payer,
@@ -380,6 +452,7 @@ pub struct CreateBuyOffer<'info> {
 
     system_program: Program<'info, System>,
     token_program: Program<'info, Token>,
+    associated_token_program: Program<'info, AssociatedToken>,
     rent: Sysvar<'info, Rent>,
 }
 
@@ -409,8 +482,8 @@ pub struct RemoveBuyOffer<'info> {
     #[account(
     mut,
     close = buyer,
+    has_one = comptoir,
     constraint = buy_offer.authority == buyer.key(),
-    constraint = buy_offer.comptoir_key == comptoir.key()
     )]
     buy_offer: Account<'info, BuyOffer>,
 
@@ -431,6 +504,9 @@ pub struct ExecuteOffer<'info> {
     #[account(mut, constraint = collection.comptoir_key == comptoir.key())]
     collection: Account<'info, Collection>,
 
+    #[account(mut, constraint = comptoir_dest_account.key() == comptoir.fees_destination)]
+    comptoir_dest_account: UncheckedAccount<'info>,
+
     #[account(
     mut,
     seeds = [
@@ -443,23 +519,25 @@ pub struct ExecuteOffer<'info> {
     )]
     escrow: UncheckedAccount<'info>,
 
-    #[account(mut, owner = buyer.key())]
-    buyer_paying_account: UncheckedAccount<'info>,
-    seller_dest_account: UncheckedAccount<'info>,
+    seller_funds_dest_account: UncheckedAccount<'info>,
+
+    #[account(mut)]
+    destination: Account<'info, TokenAccount>,
+    #[account(mut)]
+    seller_nft_account: Account<'info, TokenAccount>,
+
+
+    metadata: UncheckedAccount<'info>,
 
     #[account(
     mut,
     close = buyer,
     constraint = buy_offer.authority == buyer.key(),
+    has_one = destination,
+    has_one = metadata,
+    has_one = comptoir,
     )]
     buy_offer: Account<'info, BuyOffer>,
-
-    #[account(mut)]
-    seller_nft_account: Account<'info, TokenAccount>,
-    #[account(mut, owner = buyer.key())]
-    buyer_nft_account: Account<'info, TokenAccount>,
-
-    mint_metadata: UncheckedAccount<'info>,
 
     system_program: Program<'info, System>,
     token_program: Program<'info, Token>,
@@ -651,10 +729,11 @@ pub struct Collection {
 #[account]
 #[derive(Default)]
 pub struct BuyOffer {
-    comptoir_key: Pubkey,
-    metadata_key: Pubkey,
+    comptoir: Pubkey,
+    metadata: Pubkey,
     proposed_price: u64,
     authority: Pubkey,
+    destination: Pubkey,
 }
 
 impl Collection {
