@@ -7,7 +7,7 @@ use metaplex_token_metadata::state::PREFIX as METAPLEX_PREFIX;
 use metaplex_token_metadata::state::{Creator, Metadata};
 use std::str::FromStr;
 use anchor_spl::associated_token::AssociatedToken;
-use metaplex_token_metadata::utils::{assert_derivation, assert_owned_by};
+use metaplex_token_metadata::utils::{assert_derivation};
 use crate::constant::{ASSOCIATED_TOKEN_PROGRAM};
 use crate::constant::{PREFIX, ESCROW};
 
@@ -97,6 +97,12 @@ pub mod comptoir {
     }
 
     pub fn create_sell_order(ctx: Context<CreateSellOrder>, _nounce: u8, _salt: String, _sell_order_nounce: u8, price: u64, quantity: u64, destination: Pubkey) -> ProgramResult {
+        verify_metadata_and_derivation(
+            ctx.accounts.metadata.as_ref(),
+            &ctx.accounts.seller_nft_token_account.mint.key(),
+            &ctx.accounts.collection,
+        )?;
+
         let cpi_accounts = Transfer {
             from: ctx.accounts.seller_nft_token_account.to_account_info(),
             to: ctx.accounts.vault.to_account_info(),
@@ -133,7 +139,6 @@ pub mod comptoir {
 
         let cpi_ctx = CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(), cpi_accounts, signer);
         token::transfer(cpi_ctx, quantity_to_unlist)?;
-
 
         let sell_order = &mut ctx.accounts.sell_order;
         sell_order.quantity = sell_order.quantity.checked_sub(quantity_to_unlist).unwrap();
@@ -609,10 +614,14 @@ pub struct CreateSellOrder<'info> {
     #[account(mut)]
     payer: Signer<'info>,
     #[account(mut)]
-    seller_nft_token_account: Account<'info, TokenAccount>,
+    seller_nft_token_account: Box<Account<'info, TokenAccount>>,
 
-    comptoir: Account<'info, Comptoir>,
+    comptoir: Box<Account<'info, Comptoir>>,
+    #[account(constraint = collection.comptoir_key == comptoir.key())]
+    collection: Box<Account<'info, Collection>>,
+
     mint: Account<'info, Mint>,
+    metadata: UncheckedAccount<'info>,
 
     #[account(
     init_if_needed,
@@ -624,6 +633,7 @@ pub struct CreateSellOrder<'info> {
     ],
     bump = _nounce,
     payer = payer,
+    constraint = mint.key() == seller_nft_token_account.mint,
     )]
     vault: Account<'info, TokenAccount>,
     #[account(
@@ -780,29 +790,6 @@ fn verify_metadata_and_derivation(metadata_key: &AccountInfo, nft_mint: &Pubkey,
         return Err(ErrorCode::ErrNftNotPartOfCollection.into());
     }
     return Ok(metadata);
-}
-
-fn verify_metadata(metadata_key: &AccountInfo, collection: &Collection) -> core::result::Result<Metadata, ProgramError> {
-    assert_owned_by(metadata_key.as_ref(), &metaplex_token_metadata::id())?;
-
-    let metadata: Metadata = Metadata::from_account_info(metadata_key)?;
-    if !collection.is_part_of_collection(&metadata) {
-        return Err(ErrorCode::ErrNftNotPartOfCollection.into());
-    }
-    return Ok(metadata);
-}
-
-fn assert_derivation_key(mint: Pubkey, metadata_key: Pubkey) -> ProgramResult {
-    let path: &[&[u8]] = &[
-        METAPLEX_PREFIX.as_bytes(),
-        metaplex_token_metadata::ID.as_ref(),
-        mint.as_ref(),
-    ];
-    let (key, _) = Pubkey::find_program_address(&path, &metaplex_token_metadata::id());
-    if key != metadata_key {
-        return Err(ErrorCode::DerivedKeyInvalid.into());
-    }
-    Ok(())
 }
 
 pub mod constant {

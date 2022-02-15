@@ -6,7 +6,6 @@ use anchor_spl::token;
 use anchor_spl::token::Transfer;
 use spl_token::solana_program::program::invoke_signed;
 use crate::ErrorCode::ErrWrongTransferProgram;
-use crate::msg;
 
 
 pub fn pay<'info>(
