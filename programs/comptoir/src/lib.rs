@@ -263,6 +263,7 @@ pub mod comptoir {
     }
 
     pub fn create_buy_offer(ctx: Context<CreateBuyOffer>, _nounce: u8, _buy_offer_nounce: u8, price_proposition: u64) -> ProgramResult {
+       msg!("lol");
         verify_metadata_and_derivation(
             ctx.accounts.metadata.as_ref(),
             &ctx.accounts.nft_mint.key(),
@@ -279,7 +280,7 @@ pub mod comptoir {
         pay(
             ctx.accounts.buyer_paying_account.to_account_info(),
             ctx.accounts.escrow.to_account_info(),
-            ctx.accounts.buyer_paying_account.to_account_info(),
+            ctx.accounts.payer.to_account_info(),
             ctx.accounts.token_program.to_account_info(),
             price_proposition,
         )?;
@@ -397,7 +398,7 @@ pub struct CreateBuyOffer<'info> {
     #[account(mut)]
     payer: Signer<'info>,
 
-    nft_mint: Box<Account<'info, Mint>>,
+    nft_mint: Account<'info, Mint>,
     metadata: UncheckedAccount<'info>, //metaplex metadata account
 
     comptoir: Box<Account<'info, Comptoir>>,
@@ -415,7 +416,7 @@ pub struct CreateBuyOffer<'info> {
     )]
     escrow: Box<Account<'info, TokenAccount>>,
 
-    #[account(mut, owner = payer.key())]
+    #[account(mut)]
     buyer_paying_account: Box<Account<'info, TokenAccount>>,
     #[account(
     init_if_needed,
@@ -431,8 +432,8 @@ pub struct CreateBuyOffer<'info> {
     PREFIX.as_bytes(),
     comptoir.key().as_ref(),
     payer.key.as_ref(),
-    &price_proposition.to_ne_bytes(),
-    metadata.key.as_ref(),
+    price_proposition.to_string().as_bytes(),
+    ESCROW.as_bytes(),
     ],
     bump = buy_offer_nounce,
     payer = payer,
