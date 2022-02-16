@@ -20,7 +20,7 @@ pub mod comptoir {
 
     pub fn create_comptoir(
         ctx: Context<CreateComptoir>,
-        _nounce: u8, fees: u16, fees_destination: Pubkey, authority: Pubkey, mint: Pubkey,
+        _comptoir_nounce: u8, _escrow_nounce: u8, mint: Pubkey, fees: u16, fees_destination: Pubkey, authority: Pubkey,
     ) -> ProgramResult {
         let comptoir = &mut ctx.accounts.comptoir;
 
@@ -38,7 +38,6 @@ pub mod comptoir {
         optional_fees: Option<u16>,
         optional_fees_destination: Option<Pubkey>,
         optional_authority: Option<Pubkey>,
-        optional_mint: Option<Pubkey>,
     ) -> ProgramResult {
         let comptoir = &mut ctx.accounts.comptoir;
 
@@ -51,14 +50,22 @@ pub mod comptoir {
         if let Some(authority) = optional_authority {
             comptoir.authority = authority;
         }
-        if let Some(mint) = optional_mint {
-            comptoir.mint = mint;
-        }
-
         comptoir.validate()?;
         Ok(())
     }
 
+    pub fn update_comptoir_mint(
+        ctx: Context<UpdateComptoirMint>,
+        _escrow_nounce: u8,
+        mint: Pubkey,
+        fees_destination: Pubkey,
+    ) -> ProgramResult {
+        let comptoir = &mut ctx.accounts.comptoir;
+        comptoir.mint = mint;
+        comptoir.fees_destination = fees_destination;
+        comptoir.validate()?;
+        Ok(())
+    }
 
     pub fn create_collection(
         ctx: Context<CreateCollection>,
@@ -153,13 +160,6 @@ pub mod comptoir {
         ctx: Context<'a, 'b, 'c, 'info, Buy<'info>>,
         nounce: u8, ask_quantity: u64, max_price: u64,
     ) -> ProgramResult {
-        let is_native = ctx.accounts.comptoir.mint.key() == spl_token::native_mint::id();
-        let transfer_program = if is_native {
-            ctx.accounts.system_program.to_account_info()
-        } else {
-            ctx.accounts.token_program.to_account_info()
-        };
-
         let metadata = verify_metadata_and_derivation(
             ctx.accounts.mint_metadata.as_ref(),
             &ctx.accounts.buyer_nft_token_account.mint.key(),
@@ -223,14 +223,14 @@ pub mod comptoir {
                 ctx.accounts.buyer_paying_token_account.to_account_info(),
                 seller_token_account.to_account_info(),
                 ctx.accounts.buyer.to_account_info(),
-                transfer_program.to_account_info(),
+                ctx.accounts.token_program.to_account_info(),
                 seller_share,
             )?;
             pay(
                 ctx.accounts.buyer_paying_token_account.to_account_info(),
                 ctx.accounts.comptoir_dest_account.to_account_info(),
                 ctx.accounts.buyer.to_account_info(),
-                transfer_program.to_account_info(),
+                ctx.accounts.token_program.to_account_info(),
                 comptoir_share,
             )?;
 
@@ -241,7 +241,7 @@ pub mod comptoir {
                         ctx.accounts.buyer_paying_token_account.to_account_info(),
                         creator.0.to_account_info(),
                         ctx.accounts.buyer.to_account_info(),
-                        transfer_program.to_account_info(),
+                        ctx.accounts.token_program.to_account_info(),
                         creator_share,
                     )?;
                 }
@@ -263,13 +263,6 @@ pub mod comptoir {
     }
 
     pub fn create_buy_offer(ctx: Context<CreateBuyOffer>, _nounce: u8, _buy_offer_nounce: u8, price_proposition: u64) -> ProgramResult {
-        let is_native = ctx.accounts.comptoir.mint.key() == spl_token::native_mint::id();
-        let transfer_program = if is_native {
-            ctx.accounts.system_program.to_account_info()
-        } else {
-            ctx.accounts.token_program.to_account_info()
-        };
-
         verify_metadata_and_derivation(
             ctx.accounts.metadata.as_ref(),
             &ctx.accounts.nft_mint.key(),
@@ -287,7 +280,7 @@ pub mod comptoir {
             ctx.accounts.buyer_paying_account.to_account_info(),
             ctx.accounts.escrow.to_account_info(),
             ctx.accounts.buyer_paying_account.to_account_info(),
-            transfer_program.to_account_info(),
+            ctx.accounts.token_program.to_account_info(),
             price_proposition,
         )?;
 
@@ -295,13 +288,6 @@ pub mod comptoir {
     }
 
     pub fn remove_buy_offer(ctx: Context<RemoveBuyOffer>, nounce: u8) -> ProgramResult {
-        let is_native = ctx.accounts.comptoir.mint.key() == spl_token::native_mint::id();
-        let transfer_program = if is_native {
-            ctx.accounts.system_program.to_account_info()
-        } else {
-            ctx.accounts.token_program.to_account_info()
-        };
-
         let seeds = &[
             PREFIX.as_bytes(),
             ctx.accounts.comptoir.to_account_info().key.as_ref(),
@@ -314,7 +300,7 @@ pub mod comptoir {
             ctx.accounts.buyer_paying_account.to_account_info(),
             ctx.accounts.buyer_paying_account.to_account_info(),
             ctx.accounts.escrow.to_account_info(),
-            transfer_program.to_account_info(),
+            ctx.accounts.token_program.to_account_info(),
             ctx.accounts.buy_offer.proposed_price,
             signer,
         )?;
@@ -401,8 +387,6 @@ pub mod comptoir {
             seller_share,
             signer,
         )?;
-
-
         Ok(())
     }
 }
@@ -413,12 +397,12 @@ pub struct CreateBuyOffer<'info> {
     #[account(mut)]
     payer: Signer<'info>,
 
-    nft_mint: Account<'info, Mint>,
+    nft_mint: Box<Account<'info, Mint>>,
     metadata: UncheckedAccount<'info>, //metaplex metadata account
 
-    comptoir: Account<'info, Comptoir>,
+    comptoir: Box<Account<'info, Comptoir>>,
     #[account(mut, constraint = collection.comptoir_key == comptoir.key())]
-    collection: Account<'info, Collection>,
+    collection: Box<Account<'info, Collection>>,
     #[account(
     mut,
     seeds = [
@@ -429,10 +413,10 @@ pub struct CreateBuyOffer<'info> {
     ],
     bump = nounce,
     )]
-    escrow: UncheckedAccount<'info>,
+    escrow: Box<Account<'info, TokenAccount>>,
 
     #[account(mut, owner = payer.key())]
-    buyer_paying_account: UncheckedAccount<'info>,
+    buyer_paying_account: Box<Account<'info, TokenAccount>>,
     #[account(
     init_if_needed,
     payer = payer,
@@ -468,7 +452,7 @@ pub struct RemoveBuyOffer<'info> {
     buyer: Signer<'info>,
 
     #[account(mut, owner = buyer.key())]
-    buyer_paying_account: UncheckedAccount<'info>,
+    buyer_paying_account: Account<'info, TokenAccount>,
 
     comptoir: Account<'info, Comptoir>,
 
@@ -482,7 +466,7 @@ pub struct RemoveBuyOffer<'info> {
     ],
     bump = nounce,
     )]
-    escrow: UncheckedAccount<'info>,
+    escrow: Account<'info, TokenAccount>,
 
     #[account(
     mut,
@@ -505,12 +489,12 @@ pub struct ExecuteOffer<'info> {
     #[account(mut)]
     buyer: SystemAccount<'info>,
 
-    comptoir: Account<'info, Comptoir>,
+    comptoir: Box<Account<'info, Comptoir>>,
     #[account(mut, constraint = collection.comptoir_key == comptoir.key())]
-    collection: Account<'info, Collection>,
+    collection: Box<Account<'info, Collection>>,
 
     #[account(mut, constraint = comptoir_dest_account.key() == comptoir.fees_destination)]
-    comptoir_dest_account: UncheckedAccount<'info>,
+    comptoir_dest_account: Box<Account<'info, TokenAccount>>,
 
     #[account(
     mut,
@@ -522,9 +506,9 @@ pub struct ExecuteOffer<'info> {
     ],
     bump = nounce,
     )]
-    escrow: UncheckedAccount<'info>,
+    escrow: Box<Account<'info, TokenAccount>>,
 
-    seller_funds_dest_account: UncheckedAccount<'info>,
+    seller_funds_dest_account: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
     destination: Account<'info, TokenAccount>,
@@ -550,17 +534,35 @@ pub struct ExecuteOffer<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(nounce: u8)]
+#[instruction(comptoir_nounce: u8, escrow_nounce: u8, comptoir_mint: Pubkey)]
 pub struct CreateComptoir<'info> {
     #[account(mut)]
     payer: Signer<'info>,
     #[account(
     init,
     seeds = [ payer.key.as_ref()],
-    bump = nounce,
+    bump = comptoir_nounce,
     payer = payer,
     )]
     comptoir: Account<'info, Comptoir>,
+
+    mint: Account<'info, Mint>,
+
+    #[account(
+    init,
+    token::mint = mint,
+    token::authority = escrow,
+    seeds = [
+    PREFIX.as_bytes(),
+    comptoir.key().as_ref(),
+    comptoir_mint.as_ref(),
+    ESCROW.as_bytes()
+    ],
+    bump = escrow_nounce,
+    payer = payer,
+    )]
+    escrow: Account<'info, TokenAccount>,
+
 
     system_program: Program<'info, System>,
     token_program: Program<'info, Token>,
@@ -572,6 +574,37 @@ pub struct UpdateComptoir<'info> {
     authority: Signer<'info>,
     #[account(mut, has_one = authority)]
     comptoir: Account<'info, Comptoir>,
+}
+
+#[derive(Accounts)]
+#[instruction(escrow_nounce: u8, new_comptoir_mint: Pubkey)]
+pub struct UpdateComptoirMint<'info> {
+    #[account(mut)]
+    authority: Signer<'info>,
+    #[account(mut, has_one = authority)]
+    comptoir: Account<'info, Comptoir>,
+
+    #[account(constraint = new_comptoir_mint == mint.key())]
+    mint: Account<'info, Mint>,
+
+    #[account(
+    init_if_needed,
+    token::mint = mint,
+    token::authority = escrow,
+    seeds = [
+    PREFIX.as_bytes(),
+    comptoir.key().as_ref(),
+    new_comptoir_mint.as_ref(),
+    ESCROW.as_bytes()
+    ],
+    bump = escrow_nounce,
+    payer = authority,
+    )]
+    escrow: Account<'info, TokenAccount>,
+
+    system_program: Program<'info, System>,
+    token_program: Program<'info, Token>,
+    rent: Sysvar<'info, Rent>,
 }
 
 #[derive(Accounts)]
@@ -684,11 +717,11 @@ pub struct Buy<'info> {
     #[account(mut)]
     buyer_nft_token_account: Box<Account<'info, TokenAccount>>,
     #[account(mut)]
-    buyer_paying_token_account: UncheckedAccount<'info>,
+    buyer_paying_token_account: Account<'info, TokenAccount>,
 
     comptoir: Account<'info, Comptoir>,
     #[account(mut, constraint = comptoir_dest_account.key() == comptoir.fees_destination)]
-    comptoir_dest_account: UncheckedAccount<'info>,
+    comptoir_dest_account: Account<'info, TokenAccount>,
     #[account(constraint = collection.comptoir_key == comptoir.key())]
     collection: Account<'info, Collection>,
 
