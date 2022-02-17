@@ -298,7 +298,7 @@ pub mod comptoir {
 
         let signer: &[&[&[u8]]] = &[&seeds[..]];
         pay_with_signer(
-            ctx.accounts.buyer_paying_account.to_account_info(),
+            ctx.accounts.escrow.to_account_info(),
             ctx.accounts.buyer_paying_account.to_account_info(),
             ctx.accounts.escrow.to_account_info(),
             ctx.accounts.token_program.to_account_info(),
@@ -308,14 +308,7 @@ pub mod comptoir {
         Ok(())
     }
 
-    pub fn execute_offer<'a, 'b, 'c, 'info>(ctx: Context<'a, 'b, 'c, 'info, ExecuteOffer<'info>>, nounce: u8) -> ProgramResult {
-        let is_native = ctx.accounts.comptoir.mint.key() == spl_token::native_mint::id();
-        let transfer_program = if is_native {
-            ctx.accounts.system_program.to_account_info()
-        } else {
-            ctx.accounts.token_program.to_account_info()
-        };
-
+    pub fn execute_offer<'a, 'b, 'c, 'info>(ctx: Context<'a, 'b, 'c, 'info, ExecuteOffer<'info>>, escrow_nounce: u8) -> ProgramResult {
         let metadata = verify_metadata_and_derivation(
             &ctx.accounts.metadata,
             &ctx.accounts.seller_nft_account.mint,
@@ -354,40 +347,44 @@ pub mod comptoir {
             ctx.accounts.comptoir.to_account_info().key.as_ref(),
             ctx.accounts.comptoir.mint.as_ref(),
             ESCROW.as_bytes(),
-            &[nounce], ];
+            &[escrow_nounce], ];
         let signer: &[&[&[u8]]] = &[&seeds[..]];
 
         if let Some(creators) = creators_distributions_option.as_ref() {
             for creator in creators {
                 let creator_share = calculate_fee(creators_share, creator.1 as u16, 100);
+                msg!("1");
                 pay_with_signer(
                     ctx.accounts.escrow.to_account_info(),
                     creator.0.to_account_info(),
                     ctx.accounts.escrow.to_account_info(),
-                    transfer_program.to_account_info(),
+                    ctx.accounts.token_program.to_account_info(),
                     creator_share,
                     signer
                 )?;
             }
         }
 
+        msg!("2");
         pay_with_signer(
             ctx.accounts.escrow.to_account_info(),
             ctx.accounts.comptoir_dest_account.to_account_info(),
             ctx.accounts.escrow.to_account_info(),
-            transfer_program.to_account_info(),
+            ctx.accounts.token_program.to_account_info(),
             comptoir_share,
             signer,
         )?;
 
+        msg!("3");
         pay_with_signer(
             ctx.accounts.escrow.to_account_info(),
             ctx.accounts.seller_funds_dest_account.to_account_info(),
             ctx.accounts.escrow.to_account_info(),
-            transfer_program.to_account_info(),
+            ctx.accounts.token_program.to_account_info(),
             seller_share,
             signer,
         )?;
+
         Ok(())
     }
 }
@@ -452,7 +449,7 @@ pub struct RemoveBuyOffer<'info> {
     #[account(mut)]
     buyer: Signer<'info>,
 
-    #[account(mut, owner = buyer.key())]
+    #[account(mut)]
     buyer_paying_account: Account<'info, TokenAccount>,
 
     comptoir: Account<'info, Comptoir>,
@@ -483,7 +480,7 @@ pub struct RemoveBuyOffer<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(nounce: u8)]
+#[instruction(escrow_nounce: u8)]
 pub struct ExecuteOffer<'info> {
     seller: Signer<'info>,
 
@@ -505,10 +502,11 @@ pub struct ExecuteOffer<'info> {
     comptoir.mint.as_ref(),
     ESCROW.as_bytes()
     ],
-    bump = nounce,
+    bump = escrow_nounce,
     )]
     escrow: Box<Account<'info, TokenAccount>>,
 
+    #[account(mut)]
     seller_funds_dest_account: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
