@@ -353,7 +353,6 @@ pub mod comptoir {
         if let Some(creators) = creators_distributions_option.as_ref() {
             for creator in creators {
                 let creator_share = calculate_fee(creators_share, creator.1 as u16, 100);
-                msg!("1");
                 pay_with_signer(
                     ctx.accounts.escrow.to_account_info(),
                     creator.0.to_account_info(),
@@ -365,7 +364,6 @@ pub mod comptoir {
             }
         }
 
-        msg!("2");
         pay_with_signer(
             ctx.accounts.escrow.to_account_info(),
             ctx.accounts.comptoir_dest_account.to_account_info(),
@@ -375,7 +373,6 @@ pub mod comptoir {
             signer,
         )?;
 
-        msg!("3");
         pay_with_signer(
             ctx.accounts.escrow.to_account_info(),
             ctx.accounts.seller_funds_dest_account.to_account_info(),
