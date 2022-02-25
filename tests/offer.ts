@@ -70,7 +70,7 @@ describe('comptoir with mint', () => {
 
 
         [comptoirPDA, comptoirDump] = await anchor.web3.PublicKey.findProgramAddress(
-            [admin.publicKey.toBuffer()],
+            [Buffer.from("COMPTOIR"), admin.publicKey.toBuffer()],
             program.programId,
         );
 
@@ -99,7 +99,7 @@ describe('comptoir with mint', () => {
         await comptoirMint.mintTo(buyerTokenAccount.address, admin, [], 1000);
 
         [collectionPDA, collectionDump] = await anchor.web3.PublicKey.findProgramAddress(
-            [Buffer.from(collectionName), comptoirPDA.toBuffer()],
+            [Buffer.from("COMPTOIR"), Buffer.from(collectionName), comptoirPDA.toBuffer()],
             program.programId,
         );
 
@@ -177,7 +177,6 @@ describe('comptoir with mint', () => {
                     comptoir: comptoirPDA,
                     collection: collectionPDA,
                     systemProgram: anchor.web3.SystemProgram.programId,
-                    tokenProgram: TOKEN_PROGRAM_ID,
                     rent: anchor.web3.SYSVAR_RENT_PUBKEY,
                 },
                 signers: [admin]

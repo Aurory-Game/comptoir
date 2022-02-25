@@ -263,7 +263,6 @@ pub mod comptoir {
     }
 
     pub fn create_buy_offer(ctx: Context<CreateBuyOffer>, _nounce: u8, _buy_offer_nounce: u8, price_proposition: u64) -> ProgramResult {
-       msg!("lol");
         verify_metadata_and_derivation(
             ctx.accounts.metadata.as_ref(),
             &ctx.accounts.nft_mint.key(),
@@ -536,7 +535,10 @@ pub struct CreateComptoir<'info> {
     payer: Signer<'info>,
     #[account(
     init,
-    seeds = [ payer.key.as_ref()],
+    seeds = [
+        PREFIX.as_bytes(),
+        payer.key.as_ref()
+    ],
     bump = comptoir_nounce,
     payer = payer,
     )]
@@ -613,6 +615,7 @@ pub struct CreateCollection<'info> {
     #[account(
     init,
     seeds = [
+    PREFIX.as_bytes(),
     symbol.as_bytes(),
     comptoir.key().as_ref(),
     ],
@@ -623,7 +626,6 @@ pub struct CreateCollection<'info> {
     collection: Account<'info, Collection>,
 
     system_program: Program<'info, System>,
-    token_program: Program<'info, Token>,
     rent: Sysvar<'info, Rent>,
 }
 
@@ -760,7 +762,6 @@ pub struct SellOrder {
 pub struct Collection {
     comptoir_key: Pubkey,
     symbol: String,
-    // max size of 11
     required_verifier: Pubkey,
     fees: Option<u16>, //Takes priority over comptoir fees
 }

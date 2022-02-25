@@ -61,7 +61,10 @@ describe('comptoir with mint', () => {
         await provider.connection.confirmTransaction(fromAirdropSignature);
 
         [comptoirPDA, comptoirDump] = await anchor.web3.PublicKey.findProgramAddress(
-            [admin.publicKey.toBuffer()],
+            [
+                Buffer.from("COMPTOIR"),
+                admin.publicKey.toBuffer()
+            ],
             program.programId,
         )
 
@@ -95,7 +98,11 @@ describe('comptoir with mint', () => {
         );
 
         [collectionPDA, collectionDump] = await anchor.web3.PublicKey.findProgramAddress(
-            [Buffer.from(collectionName), comptoirPDA.toBuffer()],
+            [
+                Buffer.from("COMPTOIR"),
+                Buffer.from(collectionName),
+                comptoirPDA.toBuffer(),
+            ],
             program.programId,
         );
 
@@ -167,7 +174,7 @@ describe('comptoir with mint', () => {
         );
 
         let [failedComptoirPDA, failedComptoirDump] = await anchor.web3.PublicKey.findProgramAddress(
-            [tmpAuthority.publicKey.toBuffer()],
+            [Buffer.from("COMPTOIR"), tmpAuthority.publicKey.toBuffer()],
             program.programId,
         )
         let feeAbove100 = new anchor.BN(101)
@@ -300,7 +307,6 @@ describe('comptoir with mint', () => {
                     comptoir: comptoirPDA,
                     collection: collectionPDA,
                     systemProgram: anchor.web3.SystemProgram.programId,
-                    tokenProgram: TOKEN_PROGRAM_ID,
                     rent: anchor.web3.SYSVAR_RENT_PUBKEY,
                 },
                 signers: [admin]
@@ -322,7 +328,6 @@ describe('comptoir with mint', () => {
                         comptoir: comptoirPDA,
                         collection: collectionPDA,
                         systemProgram: anchor.web3.SystemProgram.programId,
-                        tokenProgram: TOKEN_PROGRAM_ID,
                         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
                     },
                     signers: [admin]
@@ -431,7 +436,6 @@ describe('comptoir with mint', () => {
 
         let quantity_to_buy = new anchor.BN(1)
         let max_price = new anchor.BN(1000)
-
         await program.rpc.buy(
             programNftVaultDump, quantity_to_buy, max_price, {
                 accounts: {
