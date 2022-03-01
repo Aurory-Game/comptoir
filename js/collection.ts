@@ -4,9 +4,11 @@ import {COMPTOIR_PROGRAM_ID} from './constant'
 import {PublicKey} from "@solana/web3.js";
 import {TOKEN_PROGRAM_ID} from "@solana/spl-token";
 import {getAssociatedTokenAddress, getNftVaultPDA} from "./getPDAs";
-import {getMetadataData} from "./metaplex";
-import {Program} from "@project-serum/anchor";
-
+import {getMetadata} from "./metaplex";
+import {programs} from "@metaplex/js";
+import * as idl from './types/comptoir.json';
+const { Metadata } =
+    programs.metadata;
 
 export class Collection {
     program: anchor.Program<ComptoirDefinition>
@@ -17,11 +19,8 @@ export class Collection {
         comptoirPDA: PublicKey,
         collectionPDA: PublicKey,
     ) {
-        this.program = new anchor.Program<ComptoirDefinition>(
-            IDL,
-            COMPTOIR_PROGRAM_ID,
-            provider,
-        )
+        // @ts-ignore
+        this.program = new anchor.Program(idl, COMPTOIR_PROGRAM_ID, provider,)
 
         this.comptoirPDA = comptoirPDA;
         this.collectionPDA = collectionPDA;
@@ -35,17 +34,20 @@ export class Collection {
         amount: anchor.BN
     ): Promise<string> {
         let [programNftVaultPDA, programNftVaultDump] = await getNftVaultPDA(nftMint)
-        let salt = (new Date()).getTime().toString()
         let [sellOrderPDA, sellOrderDump] = await anchor.web3.PublicKey.findProgramAddress(
-            [Buffer.from(salt), sellerNftAccount.toBuffer()],
+            [
+                Buffer.from("COMPTOIR"),
+                sellerNftAccount.toBuffer(),
+                Buffer.from(price.toString()),
+            ],
             this.program.programId,
         );
 
-        let metadataPDA = await getMetadataData(anchor.getProvider().connection, nftMint)
+        let metadataPDA = await Metadata.getPDA(nftMint)
         return await this.program.rpc.createSellOrder(
-            programNftVaultDump, salt, sellOrderDump, price, amount, sellerDestination, {
+            programNftVaultDump, sellOrderDump, price, amount, sellerDestination, {
                 accounts: {
-                    payer: anchor.Wallet.payer.publicKey,
+                    payer: anchor.Wallet.local().payer.publicKey,
                     sellerNftTokenAccount: sellerNftAccount,
                     comptoir: this.comptoirPDA,
                     collection: this.collectionPDA,
@@ -71,7 +73,7 @@ export class Collection {
         return await this.program.rpc.removeSellOrder(
             programNftVaultDump, amount, {
                 accounts: {
-                    authority: anchor.Wallet.payer.publicKey,
+                    authority: anchor.Wallet.local().payer.publicKey,
                     sellerNftTokenAccount: sellerNftAccount,
                     vault: programNftVaultPDA,
                     sellOrder: sellOrderPDA,
@@ -89,20 +91,19 @@ export class Collection {
         sellerDestinationAccount: PublicKey,
         buyerNftAccount: PublicKey,
         buyerPayingAccount: PublicKey,
-        wanted_quantity: anchor.BN,
         max_price: anchor.BN,
+        wanted_quantity: anchor.BN,
     ) : Promise<string> {
         let [programNftVaultPDA, programNftVaultDump] = await getNftVaultPDA(nftMint)
-
         let comptoirAccount = await this.program.account.comptoir.fetch(this.comptoirPDA)
 
-        let metadata = await getMetadataData(
+        let metadata = await getMetadata(
                 anchor.getProvider().connection,
                 nftMint,
         )
 
         let creatorsAccounts = []
-        for (let creator of metadata.data.data.creators) {
+        for (let creator of metadata.data.creators) {
             let creatorAddress = new PublicKey(creator.address)
             let creatorATA = await getAssociatedTokenAddress(creatorAddress, comptoirAccount.mint)
 
@@ -114,13 +115,13 @@ export class Collection {
         return await this.program.rpc.buy(
             programNftVaultDump, wanted_quantity, max_price, {
                 accounts: {
-                    buyer: anchor.Wallet.payer.publicKey,
+                    buyer: anchor.Wallet.local().payer.publicKey,
                     buyerNftTokenAccount: buyerNftAccount,
                     buyerPayingTokenAccount: buyerPayingAccount,
                     comptoir: this.comptoirPDA,
                     comptoirDestAccount: comptoirAccount.feesDestination,
                     collection: this.collectionPDA,
-                    mintMetadata: metadata.pubkey,
+                    mintMetadata: await Metadata.getPDA(metadata.mint),
                     vault: programNftVaultPDA,
                     systemProgram: anchor.web3.SystemProgram.programId,
                     tokenProgram: TOKEN_PROGRAM_ID,

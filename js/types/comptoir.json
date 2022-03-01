@@ -312,10 +312,6 @@
           "type": "u8"
         },
         {
-          "name": "salt",
-          "type": "string"
-        },
-        {
           "name": "sellOrderNounce",
           "type": "u8"
         },
@@ -828,5 +824,8 @@
       "name": "ErrWrongTransferProgram",
       "msg": "Wrong transfer program"
     }
-  ]
+  ],
+  "metadata": {
+    "address": "CVZPBk21RauVxKgZRrhbCiMZezXRpN9i5JuHDL9NHRdQ"
+  }
 }

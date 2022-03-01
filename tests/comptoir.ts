@@ -136,7 +136,11 @@ describe('comptoir with mint', () => {
             program.programId,
         );
         [sellOrderPDA, sellOrderDump] = await anchor.web3.PublicKey.findProgramAddress(
-            [Buffer.from("salt"), sellerNftAssociatedTokenAccount.toBuffer()],
+            [
+                Buffer.from("COMPTOIR"),
+                sellerNftAssociatedTokenAccount.toBuffer(),
+                Buffer.from("1000") //Sell order price
+    ],
             program.programId,
         );
     });
@@ -371,7 +375,7 @@ describe('comptoir with mint', () => {
         let quantity = new anchor.BN(4);
 
         await program.rpc.createSellOrder(
-            programNftVaultDump, "salt", sellOrderDump, price, quantity, sellerTokenAccount.address, {
+            programNftVaultDump, sellOrderDump, price, quantity, sellerTokenAccount.address, {
                 accounts: {
                     payer: seller.publicKey,
                     sellerNftTokenAccount: sellerNftAssociatedTokenAccount,

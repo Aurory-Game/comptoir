@@ -4,11 +4,11 @@ import {PublicKey} from "@solana/web3.js";
 import {ASSOCIATED_TOKEN_PROGRAM_ID, Token, TOKEN_PROGRAM_ID} from "@solana/spl-token";
 
 
-export const getComptoirPDA = async (owner): Promise<[PublicKey, number]> => {
+export const getComptoirPDA = async (owner: PublicKey): Promise<[PublicKey, number]> => {
     return await anchor.web3.PublicKey.findProgramAddress(
         [
             Buffer.from("COMPTOIR"),
-            owner.publicKey.toBuffer()
+            owner.toBuffer()
         ],
         COMPTOIR_PROGRAM_ID,
     )
@@ -40,6 +40,17 @@ export const getCollectionPDA = async (comptoirPDA: PublicKey, name: string): Pr
 export const getNftVaultPDA = async (nftMint: PublicKey): Promise<[PublicKey, number]> => {
     return await anchor.web3.PublicKey.findProgramAddress(
         [Buffer.from("vault"), nftMint.toBuffer()],
+        COMPTOIR_PROGRAM_ID,
+    );
+}
+
+export const getSellOrderPDA = async (sellerTokenAccount: PublicKey, price: anchor.BN): Promise<[PublicKey, number]> => {
+    return await anchor.web3.PublicKey.findProgramAddress(
+        [
+            Buffer.from("COMPTOIR"),
+            sellerTokenAccount.toBuffer(),
+            Buffer.from(price.toString())
+        ],
         COMPTOIR_PROGRAM_ID,
     );
 }

@@ -11,7 +11,7 @@ use metaplex_token_metadata::utils::{assert_derivation};
 use crate::constant::{ASSOCIATED_TOKEN_PROGRAM};
 use crate::constant::{PREFIX, ESCROW};
 
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("CVZPBk21RauVxKgZRrhbCiMZezXRpN9i5JuHDL9NHRdQ");
 
 #[program]
 pub mod comptoir {
@@ -103,7 +103,7 @@ pub mod comptoir {
         Ok(())
     }
 
-    pub fn create_sell_order(ctx: Context<CreateSellOrder>, _nounce: u8, _salt: String, _sell_order_nounce: u8, price: u64, quantity: u64, destination: Pubkey) -> ProgramResult {
+    pub fn create_sell_order(ctx: Context<CreateSellOrder>, _nounce: u8, _sell_order_nounce: u8, price: u64, quantity: u64, destination: Pubkey) -> ProgramResult {
         verify_metadata_and_derivation(
             ctx.accounts.metadata.as_ref(),
             &ctx.accounts.seller_nft_token_account.mint.key(),
@@ -334,12 +334,10 @@ pub mod comptoir {
             comptoir_fee = collection_share;
         }
 
-
         let total_amount = ctx.accounts.buy_offer.proposed_price;
         let creators_share = calculate_fee(total_amount, metadata.data.seller_fee_basis_points, 10000);
         let comptoir_share = calculate_fee(total_amount, comptoir_fee, 100);
         let seller_share = total_amount.checked_sub(creators_share).unwrap().checked_sub(comptoir_share).unwrap();
-
 
         let seeds = &[
             PREFIX.as_bytes(),
@@ -640,7 +638,7 @@ pub struct UpdateCollection<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(_nounce: u8, _salt: String, _sell_order_nounce: u8)]
+#[instruction(_nounce: u8, _sell_order_nounce: u8, price: u64)]
 pub struct CreateSellOrder<'info> {
     #[account(mut)]
     payer: Signer<'info>,
@@ -670,8 +668,9 @@ pub struct CreateSellOrder<'info> {
     #[account(
     init,
     seeds = [
-    _salt.as_bytes(),
+    PREFIX.as_bytes(),
     seller_nft_token_account.key().as_ref(),
+    price.to_string().as_bytes(),
     ],
     bump = _sell_order_nounce,
     payer = payer,

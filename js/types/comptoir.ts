@@ -312,10 +312,6 @@ export type Comptoir = {
           "type": "u8"
         },
         {
-          "name": "salt",
-          "type": "string"
-        },
-        {
           "name": "sellOrderNounce",
           "type": "u8"
         },
@@ -1143,10 +1139,6 @@ export const IDL: Comptoir = {
         {
           "name": "nounce",
           "type": "u8"
-        },
-        {
-          "name": "salt",
-          "type": "string"
         },
         {
           "name": "sellOrderNounce",
