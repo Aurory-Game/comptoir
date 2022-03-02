@@ -87,8 +87,7 @@ export class Collection {
 
     async buy(
         nftMint: PublicKey,
-        sellOrderPDA: PublicKey,
-        sellerDestinationAccount: PublicKey,
+        sellOrdersPDA: [PublicKey],
         buyerNftAccount: PublicKey,
         buyerPayingAccount: PublicKey,
         max_price: anchor.BN,
@@ -112,6 +111,13 @@ export class Collection {
             )
         }
 
+        let sellOrders = []
+        for (let sellOrderPDA of sellOrdersPDA) {
+            let so = await this.program.account.sellOrder.fetch(sellOrderPDA)
+            sellOrders.push({pubkey: sellOrderPDA, isWritable: true, isSigner: false})
+            sellOrders.push({pubkey: so.destination, isWritable: true, isSigner: false})
+        }
+
         return await this.program.rpc.buy(
             programNftVaultDump, wanted_quantity, max_price, {
                 accounts: {
@@ -128,8 +134,7 @@ export class Collection {
                 },
                 remainingAccounts: [
                     ...creatorsAccounts,
-                    { pubkey: sellOrderPDA, isWritable: true, isSigner: false },
-                    { pubkey: sellerDestinationAccount, isWritable: true, isSigner: false },
+                    ...sellOrders,
                 ]
             }
         );

@@ -1,7 +1,7 @@
 import * as anchor from "@project-serum/anchor";
 import {Comptoir} from "../comptoir";
 import {PublicKey} from "@solana/web3.js";
-import {getAssociatedTokenAddress, getCollectionPDA, getSellOrderPDA} from "../getPDAs";
+import {getAssociatedTokenAddress, getCollectionPDA, getComptoirPDA, getSellOrderPDA} from "../getPDAs";
 import {Token} from "@solana/spl-token";
 import {nft_data, nft_json_url} from "../../tests/data";
 import {createMint} from "../../tests/utils/utils";
@@ -12,7 +12,10 @@ let provider = anchor.Provider.local("https://api.devnet.solana.com")
 anchor.setProvider(provider);
 
 async function workflow(comptoirMint: PublicKey, nftMint: PublicKey) {
-    let comptoir = new Comptoir(provider)
+    let comptoirPDA = (await getComptoirPDA(
+        anchor.Wallet.local().payer.publicKey
+    ))[0]
+    let comptoir = new Comptoir(provider, comptoirPDA)
 
     await comptoir.createComptoir(
         anchor.Wallet.local().payer.publicKey,
@@ -31,6 +34,7 @@ async function workflow(comptoirMint: PublicKey, nftMint: PublicKey) {
         2
     )
 
+
     let collectionPDA = (await getCollectionPDA(comptoir.comptoirPDA, "AURY"))[0]
     let userNftAccount = await getAssociatedTokenAddress(anchor.Wallet.local().payer.publicKey, nftMint)
     let userTokenAccount = await getAssociatedTokenAddress(anchor.Wallet.local().payer.publicKey, comptoirMint)
@@ -39,6 +43,7 @@ async function workflow(comptoirMint: PublicKey, nftMint: PublicKey) {
 
     let sellPrice = new anchor.BN(1000)
     let sellQuantity = new anchor.BN(1)
+
 
     await collection.sellAsset(
         nftMint,
@@ -51,8 +56,7 @@ async function workflow(comptoirMint: PublicKey, nftMint: PublicKey) {
     //We buy our own asset just for demonstration
     await collection.buy(
         nftMint,
-        (await getSellOrderPDA(userNftAccount, sellPrice))[0],
-        userTokenAccount,
+        [(await getSellOrderPDA(userNftAccount, sellPrice))[0]],
         userNftAccount,
         userTokenAccount,
         sellPrice,
