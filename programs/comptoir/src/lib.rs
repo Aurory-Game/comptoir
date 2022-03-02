@@ -1,22 +1,26 @@
-use anchor_lang::solana_program::system_instruction::transfer;
+mod transfer;
+
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 use anchor_lang::prelude::*;
 use anchor_lang::AccountsClose;
-use anchor_lang::solana_program::program::invoke;
-use metaplex_token_metadata::state::{Metadata, PREFIX};
+use metaplex_token_metadata::state::PREFIX as METAPLEX_PREFIX;
+use metaplex_token_metadata::state::{Creator, Metadata};
 use std::str::FromStr;
-use metaplex_token_metadata::utils::assert_derivation;
+use anchor_spl::associated_token::AssociatedToken;
+use metaplex_token_metadata::utils::{assert_derivation};
 use crate::constant::{ASSOCIATED_TOKEN_PROGRAM};
+use crate::constant::{PREFIX, ESCROW};
 
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("CVZPBk21RauVxKgZRrhbCiMZezXRpN9i5JuHDL9NHRdQ");
 
 #[program]
 pub mod comptoir {
+    use crate::transfer::{pay, pay_with_signer};
     use super::*;
 
     pub fn create_comptoir(
         ctx: Context<CreateComptoir>,
-        _nounce: u8, fees: u16, fees_destination: Pubkey, authority: Pubkey, mint: Pubkey,
+        _comptoir_nounce: u8, _escrow_nounce: u8, mint: Pubkey, fees: u16, fees_destination: Pubkey, authority: Pubkey,
     ) -> ProgramResult {
         let comptoir = &mut ctx.accounts.comptoir;
 
@@ -34,7 +38,6 @@ pub mod comptoir {
         optional_fees: Option<u16>,
         optional_fees_destination: Option<Pubkey>,
         optional_authority: Option<Pubkey>,
-        optional_mint: Option<Pubkey>,
     ) -> ProgramResult {
         let comptoir = &mut ctx.accounts.comptoir;
 
@@ -47,14 +50,22 @@ pub mod comptoir {
         if let Some(authority) = optional_authority {
             comptoir.authority = authority;
         }
-        if let Some(mint) = optional_mint {
-            comptoir.mint = mint;
-        }
-
         comptoir.validate()?;
         Ok(())
     }
 
+    pub fn update_comptoir_mint(
+        ctx: Context<UpdateComptoirMint>,
+        _escrow_nounce: u8,
+        mint: Pubkey,
+        fees_destination: Pubkey,
+    ) -> ProgramResult {
+        let comptoir = &mut ctx.accounts.comptoir;
+        comptoir.mint = mint;
+        comptoir.fees_destination = fees_destination;
+        comptoir.validate()?;
+        Ok(())
+    }
 
     pub fn create_collection(
         ctx: Context<CreateCollection>,
@@ -92,7 +103,13 @@ pub mod comptoir {
         Ok(())
     }
 
-    pub fn create_sell_order(ctx: Context<CreateSellOrder>, _nounce: u8, _salt: String, _sell_order_nounce: u8, price: u64, quantity: u64, destination: Pubkey) -> ProgramResult {
+    pub fn create_sell_order(ctx: Context<CreateSellOrder>, _nounce: u8, _sell_order_nounce: u8, price: u64, quantity: u64, destination: Pubkey) -> ProgramResult {
+        verify_metadata_and_derivation(
+            ctx.accounts.metadata.as_ref(),
+            &ctx.accounts.seller_nft_token_account.mint.key(),
+            &ctx.accounts.collection,
+        )?;
+
         let cpi_accounts = Transfer {
             from: ctx.accounts.seller_nft_token_account.to_account_info(),
             to: ctx.accounts.vault.to_account_info(),
@@ -130,7 +147,6 @@ pub mod comptoir {
         let cpi_ctx = CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(), cpi_accounts, signer);
         token::transfer(cpi_ctx, quantity_to_unlist)?;
 
-
         let sell_order = &mut ctx.accounts.sell_order;
         sell_order.quantity = sell_order.quantity.checked_sub(quantity_to_unlist).unwrap();
 
@@ -144,9 +160,7 @@ pub mod comptoir {
         ctx: Context<'a, 'b, 'c, 'info, Buy<'info>>,
         nounce: u8, ask_quantity: u64, max_price: u64,
     ) -> ProgramResult {
-        let is_native = ctx.accounts.comptoir.mint.key() == spl_token::native_mint::id();
-
-        let metadata = verify_metadata(
+        let metadata = verify_metadata_and_derivation(
             ctx.accounts.mint_metadata.as_ref(),
             &ctx.accounts.buyer_nft_token_account.mint.key(),
             &ctx.accounts.collection,
@@ -157,24 +171,7 @@ pub mod comptoir {
         let mut creators_distributions_option: Option<Vec<(&AccountInfo, u8)>> = None;
         if let Some(creators) = metadata.data.creators {
             index = creators.len();
-            let mut creators_distributions = Vec::new();
-            for i in 0..creators.len() {
-                let remaining_account_creator = &ctx.remaining_accounts[i];
-                if is_native {
-                    assert_eq!(remaining_account_creator.key(), creators[i].address);
-                    creators_distributions.push((remaining_account_creator, creators[i].share));
-                } else {
-                    let ata_seeds = &[
-                        creators[i].address.as_ref(),
-                        ctx.accounts.token_program.key.as_ref(),
-                        ctx.accounts.comptoir.mint.as_ref(),
-                    ];
-                    let atp = Pubkey::from_str(ASSOCIATED_TOKEN_PROGRAM).unwrap();
-                    let creator_associated_token_addr = Pubkey::find_program_address(ata_seeds, &atp);
-                    assert_eq!(remaining_account_creator.key(), creator_associated_token_addr.0);
-                    creators_distributions.push((remaining_account_creator, creators[i].share));
-                }
-            }
+            let creators_distributions = verify_and_get_creators(creators, ctx.remaining_accounts, ctx.accounts.comptoir.mint);
             creators_distributions_option = Some(creators_distributions);
         }
 
@@ -194,7 +191,7 @@ pub mod comptoir {
         while index < ctx.remaining_accounts.len() {
             let mut sell_order: Account<'info, SellOrder> = Account::<'info, SellOrder>::try_from(&ctx.remaining_accounts[index])?;
             index = index + 1;
-            assert_eq!(sell_order.mint,  ctx.accounts.buyer_nft_token_account.mint.key());
+            assert_eq!(sell_order.mint, ctx.accounts.buyer_nft_token_account.mint.key());
 
             if sell_order.price > max_price {
                 return Err(ErrorCode::ErrItemPriceHigherThanMaxPrice.into());
@@ -205,15 +202,14 @@ pub mod comptoir {
                 to_buy = sell_order.quantity;
             }
 
-            //Transfer Item from vault to buyer
-            let cpi_accounts = Transfer {
-                from: ctx.accounts.vault.to_account_info(),
-                to: ctx.accounts.buyer_nft_token_account.to_account_info(),
-                authority: ctx.accounts.vault.to_account_info(),
-            };
-
-            let cpi_ctx = CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(), cpi_accounts, signer);
-            token::transfer(cpi_ctx, to_buy)?;
+            pay_with_signer(
+                ctx.accounts.vault.to_account_info(),
+                ctx.accounts.buyer_nft_token_account.to_account_info(),
+                ctx.accounts.vault.to_account_info(),
+        ctx.accounts.token_program.to_account_info(),
+                to_buy,
+                signer,
+            )?;
 
             let seller_token_account = &ctx.remaining_accounts[index];
             index = index + 1;
@@ -223,57 +219,31 @@ pub mod comptoir {
             let comptoir_share = calculate_fee(total_amount, comptoir_fee, 100);
             let seller_share = total_amount.checked_sub(creators_share).unwrap().checked_sub(comptoir_share).unwrap();
 
-            if is_native {
-                pay_native(
-                    ctx.accounts.buyer_paying_token_account.to_account_info(),
-                    seller_token_account.to_account_info(),
-                    ctx.accounts.system_program.to_account_info(),
-                    seller_share,
-                )?;
+            pay(
+                ctx.accounts.buyer_paying_token_account.to_account_info(),
+                seller_token_account.to_account_info(),
+                ctx.accounts.buyer.to_account_info(),
+                ctx.accounts.token_program.to_account_info(),
+                seller_share,
+            )?;
+            pay(
+                ctx.accounts.buyer_paying_token_account.to_account_info(),
+                ctx.accounts.comptoir_dest_account.to_account_info(),
+                ctx.accounts.buyer.to_account_info(),
+                ctx.accounts.token_program.to_account_info(),
+                comptoir_share,
+            )?;
 
-                pay_native(
-                    ctx.accounts.buyer_paying_token_account.to_account_info(),
-                    ctx.accounts.comptoir_dest_account.to_account_info(),
-                    ctx.accounts.system_program.to_account_info(),
-                    comptoir_share,
-                )?;
-            } else {
-                pay_spl(
-                    ctx.accounts.buyer_paying_token_account.to_account_info(),
-                    seller_token_account.to_account_info(),
-                    ctx.accounts.buyer.to_account_info(),
-                    ctx.accounts.token_program.to_account_info(),
-                    seller_share,
-                )?;
-
-                pay_spl(
-                    ctx.accounts.buyer_paying_token_account.to_account_info(),
-                    ctx.accounts.comptoir_dest_account.to_account_info(),
-                    ctx.accounts.buyer.to_account_info(),
-                    ctx.accounts.token_program.to_account_info(),
-                    comptoir_share,
-                )?;
-            }
-
-            if let Some(creators) = creators_distributions_option.as_ref(){
+            if let Some(creators) = creators_distributions_option.as_ref() {
                 for creator in creators {
                     let creator_share = calculate_fee(creators_share, creator.1 as u16, 100);
-                    if is_native {
-                        pay_native(
-                            ctx.accounts.buyer_paying_token_account.to_account_info(),
-                            creator.0.to_account_info(),
-                            ctx.accounts.system_program.to_account_info(),
-                            creator_share,
-                        )?;
-                    } else {
-                        pay_spl(
-                            ctx.accounts.buyer_paying_token_account.to_account_info(),
-                            creator.0.to_account_info(),
-                            ctx.accounts.buyer.to_account_info(),
-                            ctx.accounts.token_program.to_account_info(),
-                            creator_share,
-                        )?;
-                    }
+                    pay(
+                        ctx.accounts.buyer_paying_token_account.to_account_info(),
+                        creator.0.to_account_info(),
+                        ctx.accounts.buyer.to_account_info(),
+                        ctx.accounts.token_program.to_account_info(),
+                        creator_share,
+                    )?;
                 }
             }
 
@@ -291,57 +261,304 @@ pub mod comptoir {
         }
         Ok(())
     }
+
+    pub fn create_buy_offer(ctx: Context<CreateBuyOffer>, _nounce: u8, _buy_offer_nounce: u8, price_proposition: u64) -> ProgramResult {
+        verify_metadata_and_derivation(
+            ctx.accounts.metadata.as_ref(),
+            &ctx.accounts.nft_mint.key(),
+            &ctx.accounts.collection,
+        )?;
+
+        let buy_offer = &mut ctx.accounts.buy_offer;
+        buy_offer.metadata = ctx.accounts.metadata.key();
+        buy_offer.authority = ctx.accounts.payer.key();
+        buy_offer.proposed_price = price_proposition;
+        buy_offer.comptoir = ctx.accounts.comptoir.key();
+        buy_offer.destination = ctx.accounts.buyer_nft_account.key();
+
+        pay(
+            ctx.accounts.buyer_paying_account.to_account_info(),
+            ctx.accounts.escrow.to_account_info(),
+            ctx.accounts.payer.to_account_info(),
+            ctx.accounts.token_program.to_account_info(),
+            price_proposition,
+        )?;
+
+        Ok(())
+    }
+
+    pub fn remove_buy_offer(ctx: Context<RemoveBuyOffer>, nounce: u8) -> ProgramResult {
+        let seeds = &[
+            PREFIX.as_bytes(),
+            ctx.accounts.comptoir.to_account_info().key.as_ref(),
+            ctx.accounts.comptoir.mint.as_ref(),
+            ESCROW.as_bytes(),
+            &[nounce], ];
+
+        let signer: &[&[&[u8]]] = &[&seeds[..]];
+        pay_with_signer(
+            ctx.accounts.escrow.to_account_info(),
+            ctx.accounts.buyer_paying_account.to_account_info(),
+            ctx.accounts.escrow.to_account_info(),
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.buy_offer.proposed_price,
+            signer,
+        )?;
+        Ok(())
+    }
+
+    pub fn execute_offer<'a, 'b, 'c, 'info>(ctx: Context<'a, 'b, 'c, 'info, ExecuteOffer<'info>>, escrow_nounce: u8) -> ProgramResult {
+        let metadata = verify_metadata_and_derivation(
+            &ctx.accounts.metadata,
+            &ctx.accounts.seller_nft_account.mint,
+            &ctx.accounts.collection,
+        )?;
+
+        //Transfer NFT to buyer
+        pay(
+            ctx.accounts.seller_nft_account.to_account_info(),
+        ctx.accounts.destination.to_account_info(),
+            ctx.accounts.seller.to_account_info(),
+            ctx.accounts.token_program.to_account_info(),
+            1
+        )?;
+
+        let mut creators_distributions_option: Option<Vec<(&AccountInfo, u8)>> = None;
+        if let Some(creators) = metadata.data.creators {
+            let creators_distributions = verify_and_get_creators(creators, ctx.remaining_accounts, ctx.accounts.comptoir.mint);
+            creators_distributions_option = Some(creators_distributions);
+        }
+
+        let mut comptoir_fee = ctx.accounts.comptoir.fees;
+        if let Some(collection_share) = ctx.accounts.collection.fees {
+            comptoir_fee = collection_share;
+        }
+
+        let total_amount = ctx.accounts.buy_offer.proposed_price;
+        let creators_share = calculate_fee(total_amount, metadata.data.seller_fee_basis_points, 10000);
+        let comptoir_share = calculate_fee(total_amount, comptoir_fee, 100);
+        let seller_share = total_amount.checked_sub(creators_share).unwrap().checked_sub(comptoir_share).unwrap();
+
+        let seeds = &[
+            PREFIX.as_bytes(),
+            ctx.accounts.comptoir.to_account_info().key.as_ref(),
+            ctx.accounts.comptoir.mint.as_ref(),
+            ESCROW.as_bytes(),
+            &[escrow_nounce], ];
+        let signer: &[&[&[u8]]] = &[&seeds[..]];
+
+        if let Some(creators) = creators_distributions_option.as_ref() {
+            for creator in creators {
+                let creator_share = calculate_fee(creators_share, creator.1 as u16, 100);
+                pay_with_signer(
+                    ctx.accounts.escrow.to_account_info(),
+                    creator.0.to_account_info(),
+                    ctx.accounts.escrow.to_account_info(),
+                    ctx.accounts.token_program.to_account_info(),
+                    creator_share,
+                    signer
+                )?;
+            }
+        }
+
+        pay_with_signer(
+            ctx.accounts.escrow.to_account_info(),
+            ctx.accounts.comptoir_dest_account.to_account_info(),
+            ctx.accounts.escrow.to_account_info(),
+            ctx.accounts.token_program.to_account_info(),
+            comptoir_share,
+            signer,
+        )?;
+
+        pay_with_signer(
+            ctx.accounts.escrow.to_account_info(),
+            ctx.accounts.seller_funds_dest_account.to_account_info(),
+            ctx.accounts.escrow.to_account_info(),
+            ctx.accounts.token_program.to_account_info(),
+            seller_share,
+            signer,
+        )?;
+
+        Ok(())
+    }
 }
 
+#[derive(Accounts)]
+#[instruction(nounce: u8, buy_offer_nounce: u8, price_proposition: u64)]
+pub struct CreateBuyOffer<'info> {
+    #[account(mut)]
+    payer: Signer<'info>,
 
-fn pay_native<'info>(
-    payer: AccountInfo<'info>,
-    dest: AccountInfo<'info>,
-    system_program: AccountInfo<'info>,
-    amount: u64,
-) -> ProgramResult {
-    let transfer_instruction = transfer(payer.key, dest.key, amount);
-    invoke(&transfer_instruction, &[payer, dest, system_program])
-}
+    nft_mint: Account<'info, Mint>,
+    metadata: UncheckedAccount<'info>, //metaplex metadata account
 
-fn pay_spl<'info>(
-    payer: AccountInfo<'info>,
-    dest: AccountInfo<'info>,
-    authority: AccountInfo<'info>,
-    token_program: AccountInfo<'info>,
-    amount: u64,
-) -> ProgramResult {
-    let cpi_accounts = Transfer {
-        from: payer,
-        to: dest,
-        authority,
-    };
-    let cpi_ctx = CpiContext::new(token_program, cpi_accounts);
-    token::transfer(cpi_ctx, amount)
-}
+    comptoir: Box<Account<'info, Comptoir>>,
+    #[account(mut, constraint = collection.comptoir_key == comptoir.key())]
+    collection: Box<Account<'info, Collection>>,
+    #[account(
+    mut,
+    seeds = [
+    PREFIX.as_bytes(),
+    comptoir.key().as_ref(),
+    comptoir.mint.as_ref(),
+    ESCROW.as_bytes()
+    ],
+    bump = nounce,
+    )]
+    escrow: Box<Account<'info, TokenAccount>>,
 
-fn calculate_fee(amount: u64, fee_share: u16, basis: u64) -> u64 {
-    let fee = amount
-        .checked_mul(fee_share as u64)
-        .unwrap()
-        .checked_div(basis)
-        .unwrap();
+    #[account(mut)]
+    buyer_paying_account: Box<Account<'info, TokenAccount>>,
+    #[account(
+    init_if_needed,
+    payer = payer,
+    associated_token::mint = nft_mint,
+    associated_token::authority = payer,
+    )]
+    buyer_nft_account: Account<'info, TokenAccount>,
 
-    return fee;
+    #[account(
+    init,
+    seeds = [
+    PREFIX.as_bytes(),
+    comptoir.key().as_ref(),
+    payer.key.as_ref(),
+    price_proposition.to_string().as_bytes(),
+    ESCROW.as_bytes(),
+    ],
+    bump = buy_offer_nounce,
+    payer = payer,
+    )]
+    buy_offer: Account<'info, BuyOffer>,
+
+    system_program: Program<'info, System>,
+    token_program: Program<'info, Token>,
+    associated_token_program: Program<'info, AssociatedToken>,
+    rent: Sysvar<'info, Rent>,
 }
 
 #[derive(Accounts)]
 #[instruction(nounce: u8)]
+pub struct RemoveBuyOffer<'info> {
+    #[account(mut)]
+    buyer: Signer<'info>,
+
+    #[account(mut)]
+    buyer_paying_account: Account<'info, TokenAccount>,
+
+    comptoir: Account<'info, Comptoir>,
+
+    #[account(
+    mut,
+    seeds = [
+    PREFIX.as_bytes(),
+    comptoir.key().as_ref(),
+    comptoir.mint.as_ref(),
+    ESCROW.as_bytes()
+    ],
+    bump = nounce,
+    )]
+    escrow: Account<'info, TokenAccount>,
+
+    #[account(
+    mut,
+    close = buyer,
+    has_one = comptoir,
+    constraint = buy_offer.authority == buyer.key(),
+    )]
+    buy_offer: Account<'info, BuyOffer>,
+
+    system_program: Program<'info, System>,
+    token_program: Program<'info, Token>,
+    rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+#[instruction(escrow_nounce: u8)]
+pub struct ExecuteOffer<'info> {
+    seller: Signer<'info>,
+
+    #[account(mut)]
+    buyer: SystemAccount<'info>,
+
+    comptoir: Box<Account<'info, Comptoir>>,
+    #[account(mut, constraint = collection.comptoir_key == comptoir.key())]
+    collection: Box<Account<'info, Collection>>,
+
+    #[account(mut, constraint = comptoir_dest_account.key() == comptoir.fees_destination)]
+    comptoir_dest_account: Box<Account<'info, TokenAccount>>,
+
+    #[account(
+    mut,
+    seeds = [
+    PREFIX.as_bytes(),
+    comptoir.key().as_ref(),
+    comptoir.mint.as_ref(),
+    ESCROW.as_bytes()
+    ],
+    bump = escrow_nounce,
+    )]
+    escrow: Box<Account<'info, TokenAccount>>,
+
+    #[account(mut)]
+    seller_funds_dest_account: Box<Account<'info, TokenAccount>>,
+
+    #[account(mut)]
+    destination: Account<'info, TokenAccount>,
+    #[account(mut)]
+    seller_nft_account: Account<'info, TokenAccount>,
+
+
+    metadata: UncheckedAccount<'info>,
+
+    #[account(
+    mut,
+    close = buyer,
+    constraint = buy_offer.authority == buyer.key(),
+    has_one = destination,
+    has_one = metadata,
+    has_one = comptoir,
+    )]
+    buy_offer: Account<'info, BuyOffer>,
+
+    system_program: Program<'info, System>,
+    token_program: Program<'info, Token>,
+    rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+#[instruction(comptoir_nounce: u8, escrow_nounce: u8, comptoir_mint: Pubkey)]
 pub struct CreateComptoir<'info> {
     #[account(mut)]
     payer: Signer<'info>,
     #[account(
     init,
-    seeds = [ payer.key.as_ref()],
-    bump = nounce,
+    seeds = [
+        PREFIX.as_bytes(),
+        payer.key.as_ref()
+    ],
+    bump = comptoir_nounce,
     payer = payer,
     )]
     comptoir: Account<'info, Comptoir>,
+
+    mint: Account<'info, Mint>,
+
+    #[account(
+    init,
+    token::mint = mint,
+    token::authority = escrow,
+    seeds = [
+    PREFIX.as_bytes(),
+    comptoir.key().as_ref(),
+    comptoir_mint.as_ref(),
+    ESCROW.as_bytes()
+    ],
+    bump = escrow_nounce,
+    payer = payer,
+    )]
+    escrow: Account<'info, TokenAccount>,
+
 
     system_program: Program<'info, System>,
     token_program: Program<'info, Token>,
@@ -356,6 +573,37 @@ pub struct UpdateComptoir<'info> {
 }
 
 #[derive(Accounts)]
+#[instruction(escrow_nounce: u8, new_comptoir_mint: Pubkey)]
+pub struct UpdateComptoirMint<'info> {
+    #[account(mut)]
+    authority: Signer<'info>,
+    #[account(mut, has_one = authority)]
+    comptoir: Account<'info, Comptoir>,
+
+    #[account(constraint = new_comptoir_mint == mint.key())]
+    mint: Account<'info, Mint>,
+
+    #[account(
+    init_if_needed,
+    token::mint = mint,
+    token::authority = escrow,
+    seeds = [
+    PREFIX.as_bytes(),
+    comptoir.key().as_ref(),
+    new_comptoir_mint.as_ref(),
+    ESCROW.as_bytes()
+    ],
+    bump = escrow_nounce,
+    payer = authority,
+    )]
+    escrow: Account<'info, TokenAccount>,
+
+    system_program: Program<'info, System>,
+    token_program: Program<'info, Token>,
+    rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
 #[instruction(_nounce: u8, symbol: String)]
 pub struct CreateCollection<'info> {
     #[account(mut)]
@@ -365,6 +613,7 @@ pub struct CreateCollection<'info> {
     #[account(
     init,
     seeds = [
+    PREFIX.as_bytes(),
     symbol.as_bytes(),
     comptoir.key().as_ref(),
     ],
@@ -375,7 +624,6 @@ pub struct CreateCollection<'info> {
     collection: Account<'info, Collection>,
 
     system_program: Program<'info, System>,
-    token_program: Program<'info, Token>,
     rent: Sysvar<'info, Rent>,
 }
 
@@ -390,15 +638,19 @@ pub struct UpdateCollection<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(_nounce: u8, _salt: String, _sell_order_nounce: u8)]
+#[instruction(_nounce: u8, _sell_order_nounce: u8, price: u64)]
 pub struct CreateSellOrder<'info> {
     #[account(mut)]
     payer: Signer<'info>,
     #[account(mut)]
-    seller_nft_token_account: Account<'info, TokenAccount>,
+    seller_nft_token_account: Box<Account<'info, TokenAccount>>,
 
-    comptoir: Account<'info, Comptoir>,
+    comptoir: Box<Account<'info, Comptoir>>,
+    #[account(constraint = collection.comptoir_key == comptoir.key())]
+    collection: Box<Account<'info, Collection>>,
+
     mint: Account<'info, Mint>,
+    metadata: UncheckedAccount<'info>,
 
     #[account(
     init_if_needed,
@@ -410,13 +662,15 @@ pub struct CreateSellOrder<'info> {
     ],
     bump = _nounce,
     payer = payer,
+    constraint = mint.key() == seller_nft_token_account.mint,
     )]
     vault: Account<'info, TokenAccount>,
     #[account(
     init,
     seeds = [
-    _salt.as_bytes(),
+    PREFIX.as_bytes(),
     seller_nft_token_account.key().as_ref(),
+    price.to_string().as_bytes(),
     ],
     bump = _sell_order_nounce,
     payer = payer,
@@ -460,15 +714,15 @@ pub struct Buy<'info> {
     #[account(mut)]
     buyer_nft_token_account: Box<Account<'info, TokenAccount>>,
     #[account(mut)]
-    buyer_paying_token_account: UncheckedAccount<'info>,
+    buyer_paying_token_account: Account<'info, TokenAccount>,
 
     comptoir: Account<'info, Comptoir>,
     #[account(mut, constraint = comptoir_dest_account.key() == comptoir.fees_destination)]
-    comptoir_dest_account: UncheckedAccount<'info>,
+    comptoir_dest_account: Account<'info, TokenAccount>,
     #[account(constraint = collection.comptoir_key == comptoir.key())]
     collection: Account<'info, Collection>,
 
-    mint_metadata: AccountInfo<'info>,
+    mint_metadata: UncheckedAccount<'info>,
 
     #[account(
     mut,
@@ -506,9 +760,19 @@ pub struct SellOrder {
 #[account]
 pub struct Collection {
     comptoir_key: Pubkey,
-    symbol: String, // max size of 11
+    symbol: String,
     required_verifier: Pubkey,
     fees: Option<u16>, //Takes priority over comptoir fees
+}
+
+#[account]
+#[derive(Default)]
+pub struct BuyOffer {
+    comptoir: Pubkey,
+    metadata: Pubkey,
+    proposed_price: u64,
+    authority: Pubkey,
+    destination: Pubkey,
 }
 
 impl Collection {
@@ -540,6 +804,65 @@ impl Comptoir {
     }
 }
 
+fn verify_metadata_and_derivation(metadata_key: &AccountInfo, nft_mint: &Pubkey, collection: &Collection) -> core::result::Result<Metadata, ProgramError> {
+    assert_derivation(
+        &metaplex_token_metadata::id(),
+        metadata_key,
+        &[
+            METAPLEX_PREFIX.as_bytes(),
+            metaplex_token_metadata::id().as_ref(),
+            nft_mint.as_ref(),
+        ],
+    )?;
+    let metadata = Metadata::from_account_info(metadata_key)?;
+    if !collection.is_part_of_collection(&metadata) {
+        return Err(ErrorCode::ErrNftNotPartOfCollection.into());
+    }
+    return Ok(metadata);
+}
+
+pub mod constant {
+    pub const ASSOCIATED_TOKEN_PROGRAM: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
+    pub const TOKEN_PROGRAM: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+    pub const PREFIX: &str = "COMPTOIR";
+    pub const ESCROW: &str = "ESCROW";
+}
+
+
+fn calculate_fee(amount: u64, fee_share: u16, basis: u64) -> u64 {
+    let fee = amount
+        .checked_mul(fee_share as u64)
+        .unwrap()
+        .checked_div(basis)
+        .unwrap();
+
+    return fee;
+}
+
+fn verify_and_get_creators<'a, 'b, 'c, 'info>(creators: Vec<Creator>, remaining_accounts: &'c [AccountInfo<'info>], comptoir_mint: Pubkey) -> Vec<(&'c AccountInfo<'info>, u8)> {
+    let is_native = comptoir_mint == spl_token::native_mint::id();
+    let mut creators_distributions = Vec::new();
+    for i in 0..creators.len() {
+        let remaining_account_creator = &remaining_accounts[i];
+        if is_native {
+            assert_eq!(remaining_account_creator.key(), creators[i].address);
+            creators_distributions.push((remaining_account_creator, creators[i].share));
+        } else {
+            let ata_seeds: &[&[u8]] = &[
+                creators[i].address.as_ref(),
+                spl_token::ID.as_ref(),
+                comptoir_mint.as_ref(),
+            ];
+            let atp = Pubkey::from_str(ASSOCIATED_TOKEN_PROGRAM).unwrap();
+            let creator_associated_token_addr = Pubkey::find_program_address(&ata_seeds, &atp);
+            assert_eq!(remaining_account_creator.key(), creator_associated_token_addr.0);
+            creators_distributions.push((remaining_account_creator, creators[i].share));
+        }
+    }
+    return creators_distributions;
+}
+
+
 #[error]
 pub enum ErrorCode {
     #[msg("Fee should be <= 100")]
@@ -558,27 +881,8 @@ pub enum ErrorCode {
     ErrMetaDataMintDoesNotMatchItemMint,
     #[msg("nft not part of collection")]
     ErrNftNotPartOfCollection,
-}
-
-fn verify_metadata(metadata_key: &AccountInfo, nft_mint: &Pubkey, collection: &Collection) -> Result<Metadata> {
-    assert_derivation(
-        &metaplex_token_metadata::id(),
-        metadata_key,
-        &[
-            PREFIX.as_bytes(),
-            metaplex_token_metadata::id().as_ref(),
-            nft_mint.as_ref(),
-        ],
-    )?;
-    let metadata = Metadata::from_account_info(metadata_key)?;
-    if !collection.is_part_of_collection(&metadata) {
-        return Err(ErrorCode::ErrNftNotPartOfCollection.into());
-    }
-    return Ok(metadata)
-}
-
-
-pub mod constant {
-    pub const TOKEN_METADATA_PROGRAM: &str = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s";
-    pub const ASSOCIATED_TOKEN_PROGRAM: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
+    #[msg("Derived key invalid")]
+    DerivedKeyInvalid,
+    #[msg("Wrong transfer program")]
+    ErrWrongTransferProgram,
 }
