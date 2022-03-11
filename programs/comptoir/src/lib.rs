@@ -666,7 +666,7 @@ pub struct CreateSellOrder<'info> {
     )]
     vault: Account<'info, TokenAccount>,
     #[account(
-    init,
+    init_if_needed,
     seeds = [
     PREFIX.as_bytes(),
     seller_nft_token_account.key().as_ref(),
