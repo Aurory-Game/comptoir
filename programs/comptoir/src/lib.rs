@@ -270,7 +270,7 @@ pub mod comptoir {
         )?;
 
         let buy_offer = &mut ctx.accounts.buy_offer;
-        buy_offer.metadata = ctx.accounts.metadata.key();
+        buy_offer.mint = ctx.accounts.nft_mint.key();
         buy_offer.authority = ctx.accounts.payer.key();
         buy_offer.proposed_price = price_proposition;
         buy_offer.comptoir = ctx.accounts.comptoir.key();
@@ -515,8 +515,8 @@ pub struct ExecuteOffer<'info> {
     mut,
     close = buyer,
     constraint = buy_offer.authority == buyer.key(),
+    constraint = seller_nft_account.mint.key() == buy_offer.mint,
     has_one = destination,
-    has_one = metadata,
     has_one = comptoir,
     )]
     buy_offer: Account<'info, BuyOffer>,
@@ -769,7 +769,7 @@ pub struct Collection {
 #[derive(Default)]
 pub struct BuyOffer {
     comptoir: Pubkey,
-    metadata: Pubkey,
+    mint: Pubkey,
     proposed_price: u64,
     authority: Pubkey,
     destination: Pubkey,

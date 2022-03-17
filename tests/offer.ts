@@ -255,7 +255,7 @@ describe('comptoir with mint', () => {
 
         let buyOffer = await program.account.buyOffer.fetch(buyOfferPDA)
         assert.equal(buyOffer.comptoir.toString(), comptoirPDA.toString());
-        assert.equal(buyOffer.metadata.toString(), metadataPDA.toString());
+        assert.equal(buyOffer.mint.toString(), nftMint.publicKey.toString());
         assert.equal(buyOffer.proposedPrice.toString(), "1000");
         assert.equal(buyOffer.authority.toString(), buyer.publicKey.toString());
         assert.equal(buyOffer.destination.toString(), buyerNftTokenAccount.toString());
