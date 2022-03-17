@@ -275,6 +275,7 @@ pub mod comptoir {
         buy_offer.proposed_price = price_proposition;
         buy_offer.comptoir = ctx.accounts.comptoir.key();
         buy_offer.destination = ctx.accounts.buyer_nft_account.key();
+        buy_offer.mint = ctx.accounts.nft_mint.key();
 
         pay(
             ctx.accounts.buyer_paying_account.to_account_info(),
@@ -773,6 +774,7 @@ pub struct BuyOffer {
     proposed_price: u64,
     authority: Pubkey,
     destination: Pubkey,
+    mint: Pubkey,
 }
 
 impl Collection {
