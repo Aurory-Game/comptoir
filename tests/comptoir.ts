@@ -475,5 +475,4 @@ describe('comptoir with mint', () => {
         let updatedCreatorTokenAccount = await comptoirMint.getAccountInfo(creatorTokenAccount.address)
         assert.equal(updatedCreatorTokenAccount.amount.toNumber(), 100);
     });
-
 });

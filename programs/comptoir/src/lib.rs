@@ -189,7 +189,13 @@ pub mod comptoir {
         let mut remaining_to_buy = ask_quantity;
 
         while index < ctx.remaining_accounts.len() {
-            let mut sell_order: Account<'info, SellOrder> = Account::<'info, SellOrder>::try_from(&ctx.remaining_accounts[index])?;
+            let sell_order_result= Account::<'info, SellOrder>::try_from(&ctx.remaining_accounts[index]);
+            if sell_order_result.is_err() {
+                index = index + 2;
+                continue
+            }
+
+            let mut sell_order = sell_order_result.unwrap();
             index = index + 1;
             assert_eq!(sell_order.mint, ctx.accounts.buyer_nft_token_account.mint.key());
 
