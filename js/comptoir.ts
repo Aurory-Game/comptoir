@@ -3,7 +3,7 @@ import {Comptoir as ComptoirDefinition} from './types/comptoir';
 import {COMPTOIR_PROGRAM_ID} from './constant'
 import * as idl from './types/comptoir.json';
 
-import {PublicKey} from "@solana/web3.js";
+import {Keypair, PublicKey} from "@solana/web3.js";
 import {TOKEN_PROGRAM_ID} from "@solana/spl-token";
 import {getCollectionPDA, getComptoirPDA, getEscrowPDA} from "./getPDAs";
 
@@ -23,6 +23,7 @@ export class Comptoir {
         mint: PublicKey,
         fees: number,
         feesDestination: PublicKey,
+        signers?: Keypair[]
     ): Promise<string> {
         let [comptoirPDA, comptoirNounce] = await getComptoirPDA(owner)
 
@@ -41,6 +42,7 @@ export class Comptoir {
                     tokenProgram: TOKEN_PROGRAM_ID,
                     rent: anchor.web3.SYSVAR_RENT_PUBKEY,
                 },
+                signers: signers,
             });
     }
 
@@ -49,8 +51,12 @@ export class Comptoir {
         required_metadata_signer: PublicKey,
         collection_symbol: string,
         fee?: number,
+        signers?: Keypair[]
     ): Promise<string>  {
         let [collectionPDA, collectionNounce] = await getCollectionPDA(this.comptoirPDA, collection_symbol)
+        if (!fee) {
+            fee = null
+        }
         return await this.program.rpc.createCollection(
             collectionNounce, collection_symbol, required_metadata_signer, fee, {
                 accounts: {
@@ -60,6 +66,7 @@ export class Comptoir {
                     systemProgram: anchor.web3.SystemProgram.programId,
                     rent: anchor.web3.SYSVAR_RENT_PUBKEY,
                 },
+                signers: signers,
             });
     }
 }
