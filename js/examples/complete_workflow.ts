@@ -61,6 +61,7 @@ async function workflow(comptoirMint: PublicKey, nftMint: PublicKey) {
         userTokenAccount,
         sellPrice,
         sellQuantity,
+        anchor.Wallet.local().payer
     )
 }
 
