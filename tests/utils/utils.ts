@@ -64,7 +64,7 @@ export async function createMint(
             ata,
             fee_payer,
             [],
-            35
+            5
         )
     );
 

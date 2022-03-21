@@ -8,14 +8,14 @@ import {nft_data, nft_json_url} from "./data";
 import {createMint} from "./utils/utils";
 import {Comptoir } from '../js/comptoir';
 import {Collection} from "../js/collection";
-import {getCollectionPDA, getSellOrderPDA} from "../js/getPDAs";
+import {getCollectionPDA, getEscrowPDA, getNftVaultPDA, getSellOrderPDA} from "../js/getPDAs";
 
 let provider = anchor.Provider.env()
 anchor.setProvider(provider);
 
 const program = anchor.workspace.Comptoir as Program<ComptoirProgramType>;
 
-describe('comptoir with mint', () => {
+describe('sell orders', () => {
     let creator: web3.Keypair;
     let creatorTokenAccount: splToken.AccountInfo;
     let seller: web3.Keypair;
@@ -78,12 +78,7 @@ describe('comptoir with mint', () => {
         metadataPDA = metadataAddr
         nftMint = new Token(provider.connection, mint.publicKey, TOKEN_PROGRAM_ID, seller)
 
-        sellerNftAssociatedTokenAccount = await Token.getAssociatedTokenAddress(
-            ASSOCIATED_TOKEN_PROGRAM_ID,
-            TOKEN_PROGRAM_ID,
-            nftMint.publicKey,
-            seller.publicKey
-        );
+        sellerNftAssociatedTokenAccount = (await nftMint.getOrCreateAssociatedAccountInfo(seller.publicKey)).address
 
         comptoir = new Comptoir(provider)
         await comptoir.createComptoir(seller.publicKey, comptoirMint.publicKey, 5, sellerTokenAccount.address)
@@ -109,6 +104,14 @@ describe('comptoir with mint', () => {
             new anchor.BN(2200),
             new anchor.BN(2)
         )
+
+        let sellerAfterSell = await nftMint.getAccountInfo(sellerNftAssociatedTokenAccount)
+        assert.equal(sellerAfterSell.amount.toNumber(), 1)
+
+        let nftVaultAddr = (await getNftVaultPDA(nftMint.publicKey))[0]
+        let vaultAfterSell = await nftMint.getAccountInfo(nftVaultAddr)
+
+        assert.equal(vaultAfterSell.amount.toNumber(), 4)
 
         let buyer = anchor.web3.Keypair.generate()
         let fromAirdropSignature = await provider.connection.requestAirdrop(
