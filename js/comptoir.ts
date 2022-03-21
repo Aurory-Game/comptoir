@@ -1,11 +1,11 @@
-import * as anchor from "@project-serum/anchor";
-import {Comptoir as ComptoirDefinition} from './types/comptoir';
-import {COMPTOIR_PROGRAM_ID} from './constant'
-import * as idl from './types/comptoir.json';
+import * as anchor from '@project-serum/anchor'
+import { Comptoir as ComptoirDefinition } from './types/comptoir'
+import { COMPTOIR_PROGRAM_ID } from './constant'
+import * as idl from './types/comptoir.json'
 
-import {Keypair, PublicKey} from "@solana/web3.js";
-import {TOKEN_PROGRAM_ID} from "@solana/spl-token";
-import {getCollectionPDA, getComptoirPDA, getEscrowPDA} from "./getPDAs";
+import { Keypair, PublicKey } from '@solana/web3.js'
+import { TOKEN_PROGRAM_ID } from '@solana/spl-token'
+import { getCollectionPDA, getComptoirPDA, getEscrowPDA } from './getPDAs'
 
 export class Comptoir {
     program: anchor.Program<ComptoirDefinition>
@@ -15,7 +15,7 @@ export class Comptoir {
     constructor(provider: anchor.Provider, comptoirPDA?: PublicKey) {
         // @ts-ignore
         this.program = new anchor.Program(idl, COMPTOIR_PROGRAM_ID, provider,)
-        this.comptoirPDA = comptoirPDA;
+        this.comptoirPDA = comptoirPDA
     }
 
     async createComptoir(
@@ -29,7 +29,7 @@ export class Comptoir {
 
         let [escrowPDA, escrowNounce] = await getEscrowPDA(comptoirPDA, mint)
 
-        this.comptoirPDA = comptoirPDA;
+        this.comptoirPDA = comptoirPDA
 
         return await this.program.rpc.createComptoir(
             comptoirNounce, escrowNounce, mint, fees, feesDestination, anchor.Wallet.local().payer.publicKey, {
@@ -43,7 +43,7 @@ export class Comptoir {
                     rent: anchor.web3.SYSVAR_RENT_PUBKEY,
                 },
                 signers: signers,
-            });
+            })
     }
 
     async createCollection(
@@ -67,6 +67,6 @@ export class Comptoir {
                     rent: anchor.web3.SYSVAR_RENT_PUBKEY,
                 },
                 signers: signers,
-            });
+            })
     }
 }

@@ -1,14 +1,14 @@
-import * as anchor from "@project-serum/anchor";
-import {Comptoir as ComptoirDefinition, IDL} from './types/comptoir';
-import {COMPTOIR_PROGRAM_ID} from './constant'
-import {Keypair, PublicKey} from "@solana/web3.js";
-import {TOKEN_PROGRAM_ID} from "@solana/spl-token";
-import {getAssociatedTokenAddress, getNftVaultPDA, getSellOrderPDA} from "./getPDAs";
-import {getMetadata} from "./metaplex";
-import {programs} from "@metaplex/js";
-import * as idl from './types/comptoir.json';
+import * as anchor from '@project-serum/anchor'
+import { Comptoir as ComptoirDefinition, IDL } from './types/comptoir'
+import { COMPTOIR_PROGRAM_ID } from './constant'
+import { Keypair, PublicKey } from '@solana/web3.js'
+import { TOKEN_PROGRAM_ID } from '@solana/spl-token'
+import { getAssociatedTokenAddress, getNftVaultPDA, getSellOrderPDA } from './getPDAs'
+import { getMetadata } from './metaplex'
+import { programs } from '@metaplex/js'
+import * as idl from './types/comptoir.json'
 const { Metadata } =
-    programs.metadata;
+    programs.metadata
 
 export class Collection {
     program: anchor.Program<ComptoirDefinition>
@@ -22,8 +22,8 @@ export class Collection {
         // @ts-ignore
         this.program = new anchor.Program(idl, COMPTOIR_PROGRAM_ID, provider,)
 
-        this.comptoirPDA = comptoirPDA;
-        this.collectionPDA = collectionPDA;
+        this.comptoirPDA = comptoirPDA
+        this.collectionPDA = collectionPDA
     }
 
     async sellAsset(
@@ -55,7 +55,7 @@ export class Collection {
                 },
                 signers: signers,
             }
-        );
+        )
     }
 
     async removeSellOrder(
@@ -79,7 +79,7 @@ export class Collection {
                 },
                 signers: signers,
             }
-        );
+        )
     }
 
     async buy(
@@ -112,8 +112,8 @@ export class Collection {
         let sellOrders = []
         for (let sellOrderPDA of sellOrdersPDA) {
             let so = await this.program.account.sellOrder.fetch(sellOrderPDA)
-            sellOrders.push({pubkey: sellOrderPDA, isWritable: true, isSigner: false})
-            sellOrders.push({pubkey: so.destination, isWritable: true, isSigner: false})
+            sellOrders.push({ pubkey: sellOrderPDA, isWritable: true, isSigner: false })
+            sellOrders.push({ pubkey: so.destination, isWritable: true, isSigner: false })
         }
 
         return await this.program.rpc.buy(
@@ -136,6 +136,6 @@ export class Collection {
                 ],
                 signers: [buyer],
             }
-        );
+        )
     }
 }
