@@ -32,9 +32,9 @@ export class Comptoir {
         this.comptoirPDA = comptoirPDA
 
         return await this.program.rpc.createComptoir(
-            comptoirNounce, escrowNounce, mint, fees, feesDestination, anchor.Wallet.local().payer.publicKey, {
+            comptoirNounce, escrowNounce, mint, fees, feesDestination, owner, {
                 accounts: {
-                    payer: anchor.Wallet.local().payer.publicKey,
+                    payer: owner,
                     comptoir: comptoirPDA,
                     mint: mint,
                     escrow: escrowPDA,
@@ -50,17 +50,18 @@ export class Comptoir {
         name: string,
         required_metadata_signer: PublicKey,
         collection_symbol: string,
+        ignore_creators: boolean,
+        authority: PublicKey,
         fee?: number,
         signers?: Keypair[]
     ): Promise<string>  {
         let [collectionPDA, collectionNounce] = await getCollectionPDA(this.comptoirPDA, collection_symbol)
-        if (!fee) {
-            fee = null
-        }
+        if (!fee) {fee = null}
+
         return await this.program.rpc.createCollection(
-            collectionNounce, collection_symbol, required_metadata_signer, fee, {
+            collectionNounce, collection_symbol, required_metadata_signer, fee, ignore_creators, {
                 accounts: {
-                    authority: anchor.Wallet.local().publicKey,
+                    authority: authority,
                     comptoir: this.comptoirPDA,
                     collection: collectionPDA,
                     systemProgram: anchor.web3.SystemProgram.programId,

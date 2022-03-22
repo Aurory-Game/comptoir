@@ -69,7 +69,7 @@ pub mod comptoir {
 
     pub fn create_collection(
         ctx: Context<CreateCollection>,
-        _nounce: u8, symbol: String, required_verifier: Pubkey, fee: Option<u16>,
+        _nounce: u8, symbol: String, required_verifier: Pubkey, fee: Option<u16>, ignore_fee: bool,
     ) -> ProgramResult {
         let collection = &mut ctx.accounts.collection;
 
@@ -77,6 +77,7 @@ pub mod comptoir {
         collection.required_verifier = required_verifier;
         collection.symbol = symbol;
         collection.fees = fee;
+        collection.ignore_creator_fee = ignore_fee;
 
         collection.validate()?;
         Ok(())
@@ -87,6 +88,7 @@ pub mod comptoir {
         optional_fee: Option<u16>,
         optional_symbol: Option<String>,
         optional_required_verifier: Option<Pubkey>,
+        optional_ignore_creator_fee: Option<bool>,
     ) -> ProgramResult {
         let collection = &mut ctx.accounts.collection;
 
@@ -99,6 +101,10 @@ pub mod comptoir {
         if let Some(required_verifier) = optional_required_verifier {
             collection.required_verifier = required_verifier;
         }
+        if let Some(ignore_creator_fee) = optional_ignore_creator_fee {
+            collection.ignore_creator_fee = ignore_creator_fee;
+        }
+
         collection.validate()?;
         Ok(())
     }
@@ -167,12 +173,13 @@ pub mod comptoir {
         )?;
         let mut index = 0;
 
-        //verify creators and use associated token account if mint isnt native
         let mut creators_distributions_option: Option<Vec<(&AccountInfo, u8)>> = None;
-        if let Some(creators) = metadata.data.creators {
-            index = creators.len();
-            let creators_distributions = verify_and_get_creators(creators, ctx.remaining_accounts, ctx.accounts.comptoir.mint);
-            creators_distributions_option = Some(creators_distributions);
+        if !ctx.accounts.collection.ignore_creator_fee {
+            if let Some(creators)  = metadata.data.creators {
+                index = creators.len();
+                let creators_distributions = verify_and_get_creators(creators, ctx.remaining_accounts, ctx.accounts.comptoir.mint);
+                creators_distributions_option = Some(creators_distributions);
+            }
         }
 
         let mut comptoir_fee = ctx.accounts.comptoir.fees;
@@ -221,7 +228,10 @@ pub mod comptoir {
             index = index + 1;
             assert_eq!(seller_token_account.key(), sell_order.destination);
             let total_amount = sell_order.price.checked_mul(to_buy).unwrap();
-            let creators_share = calculate_fee(total_amount, metadata.data.seller_fee_basis_points, 10000);
+            let mut creators_share: u64 = 0;
+            if !ctx.accounts.collection.ignore_creator_fee {
+                creators_share = calculate_fee(total_amount, metadata.data.seller_fee_basis_points, 10000);
+            }
             let comptoir_share = calculate_fee(total_amount, comptoir_fee, 100);
             let seller_share = total_amount.checked_sub(creators_share).unwrap().checked_sub(comptoir_share).unwrap();
 
@@ -330,9 +340,11 @@ pub mod comptoir {
         )?;
 
         let mut creators_distributions_option: Option<Vec<(&AccountInfo, u8)>> = None;
-        if let Some(creators) = metadata.data.creators {
-            let creators_distributions = verify_and_get_creators(creators, ctx.remaining_accounts, ctx.accounts.comptoir.mint);
-            creators_distributions_option = Some(creators_distributions);
+        if !ctx.accounts.collection.ignore_creator_fee {
+            if let Some(creators) = metadata.data.creators {
+                let creators_distributions = verify_and_get_creators(creators, ctx.remaining_accounts, ctx.accounts.comptoir.mint);
+                creators_distributions_option = Some(creators_distributions);
+            }
         }
 
         let mut comptoir_fee = ctx.accounts.comptoir.fees;
@@ -341,7 +353,10 @@ pub mod comptoir {
         }
 
         let total_amount = ctx.accounts.buy_offer.proposed_price;
-        let creators_share = calculate_fee(total_amount, metadata.data.seller_fee_basis_points, 10000);
+        let mut creators_share = 0;
+        if !ctx.accounts.collection.ignore_creator_fee {
+            creators_share = calculate_fee(total_amount, metadata.data.seller_fee_basis_points, 10000);
+        }
         let comptoir_share = calculate_fee(total_amount, comptoir_fee, 100);
         let seller_share = total_amount.checked_sub(creators_share).unwrap().checked_sub(comptoir_share).unwrap();
 
@@ -769,6 +784,7 @@ pub struct Collection {
     symbol: String,
     required_verifier: Pubkey,
     fees: Option<u16>, //Takes priority over comptoir fees
+    ignore_creator_fee: bool,
 }
 
 #[account]
