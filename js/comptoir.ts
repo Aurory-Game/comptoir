@@ -19,22 +19,21 @@ export class Comptoir {
     }
 
     async createComptoir(
-        owner: PublicKey,
+        owner: Keypair,
         mint: PublicKey,
         fees: number,
         feesDestination: PublicKey,
-        signers?: Keypair[]
     ): Promise<string> {
-        let [comptoirPDA, comptoirNounce] = await getComptoirPDA(owner)
+        let [comptoirPDA, comptoirNounce] = await getComptoirPDA(owner.publicKey)
 
         let [escrowPDA, escrowNounce] = await getEscrowPDA(comptoirPDA, mint)
 
         this.comptoirPDA = comptoirPDA
 
         return await this.program.rpc.createComptoir(
-            comptoirNounce, escrowNounce, mint, fees, feesDestination, owner, {
+            comptoirNounce, escrowNounce, mint, fees, feesDestination, owner.publicKey, {
                 accounts: {
-                    payer: owner,
+                    payer: owner.publicKey,
                     comptoir: comptoirPDA,
                     mint: mint,
                     escrow: escrowPDA,
@@ -42,18 +41,17 @@ export class Comptoir {
                     tokenProgram: TOKEN_PROGRAM_ID,
                     rent: anchor.web3.SYSVAR_RENT_PUBKEY,
                 },
-                signers: signers,
+                signers: [owner],
             })
     }
 
     async createCollection(
+        authority: Keypair,
         name: string,
         required_metadata_signer: PublicKey,
         collection_symbol: string,
         ignore_creators: boolean,
-        authority: PublicKey,
         fee?: number,
-        signers?: Keypair[]
     ): Promise<string>  {
         let [collectionPDA, collectionNounce] = await getCollectionPDA(this.comptoirPDA, collection_symbol)
         if (!fee) {fee = null}
@@ -61,13 +59,13 @@ export class Comptoir {
         return await this.program.rpc.createCollection(
             collectionNounce, collection_symbol, required_metadata_signer, fee, ignore_creators, {
                 accounts: {
-                    authority: authority,
+                    authority: authority.publicKey,
                     comptoir: this.comptoirPDA,
                     collection: collectionPDA,
                     systemProgram: anchor.web3.SystemProgram.programId,
                     rent: anchor.web3.SYSVAR_RENT_PUBKEY,
                 },
-                signers: signers,
+                signers: [authority],
             })
     }
 }

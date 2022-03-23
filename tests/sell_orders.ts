@@ -79,8 +79,8 @@ describe('multi sell orders test', () => {
         sellerNftAssociatedTokenAccount = (await nftMint.getOrCreateAssociatedAccountInfo(seller.publicKey)).address
 
         comptoir = new Comptoir(provider)
-        await comptoir.createComptoir(seller.publicKey, comptoirMint.publicKey, 5, sellerTokenAccount.address, [seller])
-        await comptoir.createCollection("AURY", creator.publicKey, "AURY", false, seller.publicKey, null, [seller])
+        await comptoir.createComptoir(seller, comptoirMint.publicKey, 5, sellerTokenAccount.address)
+        await comptoir.createCollection(seller,"AURY", creator.publicKey, "AURY", false)
 
         let collectionPDA = (await getCollectionPDA(comptoir.comptoirPDA, "AURY"))[0]
         collection = new Collection(provider, comptoir.comptoirPDA, collectionPDA)
@@ -88,23 +88,21 @@ describe('multi sell orders test', () => {
 
     it('sell and buy multiple orders', async function () {
         await collection.sellAsset(
-            seller.publicKey,
             nftMint.publicKey,
             sellerNftAssociatedTokenAccount,
             sellerTokenAccount.address,
             new anchor.BN(2000),
             new anchor.BN(2),
-            [seller],
-        )
+            seller,
+       )
 
         await collection.sellAsset(
-            seller.publicKey,
             nftMint.publicKey,
             sellerNftAssociatedTokenAccount,
             sellerTokenAccount.address,
             new anchor.BN(2200),
             new anchor.BN(2),
-            [seller],
+            seller,
         )
 
         let sellerAfterSell = await nftMint.getAccountInfo(sellerNftAssociatedTokenAccount)

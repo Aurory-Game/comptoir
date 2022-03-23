@@ -31,13 +31,12 @@ export class Collection {
     }
 
     async sellAsset(
-        seller: PublicKey,
         nftMint: PublicKey,
         sellerNftAccount: PublicKey,
         sellerDestination: PublicKey,
         price: anchor.BN,
         amount: anchor.BN,
-        signers?: Keypair[]
+        seller: Keypair
     ): Promise<string> {
         let [programNftVaultPDA, programNftVaultDump] = await getNftVaultPDA(nftMint)
         let [sellOrderPDA, sellOrderDump] = await getSellOrderPDA(sellerNftAccount, price)
@@ -46,7 +45,7 @@ export class Collection {
         return await this.program.rpc.createSellOrder(
             programNftVaultDump, sellOrderDump, price, amount, sellerDestination, {
                 accounts: {
-                    payer: seller,
+                    payer: seller.publicKey,
                     sellerNftTokenAccount: sellerNftAccount,
                     comptoir: this.comptoirPDA,
                     collection: this.collectionPDA,
@@ -58,24 +57,23 @@ export class Collection {
                     tokenProgram: TOKEN_PROGRAM_ID,
                     rent: anchor.web3.SYSVAR_RENT_PUBKEY,
                 },
-                signers: signers,
+                signers: [seller],
             }
         )
     }
 
     async removeSellOrder(
-        seller: PublicKey,
         nftMint: PublicKey,
         sellerNftAccount: PublicKey,
         sellOrderPDA: PublicKey,
         amount: anchor.BN,
-        signers?: Keypair[]
+        seller: Keypair,
     ): Promise<string> {
         let [programNftVaultPDA, programNftVaultDump] = await getNftVaultPDA(nftMint)
         return await this.program.rpc.removeSellOrder(
             programNftVaultDump, amount, {
                 accounts: {
-                    authority: seller,
+                    authority: seller.publicKey,
                     sellerNftTokenAccount: sellerNftAccount,
                     vault: programNftVaultPDA,
                     sellOrder: sellOrderPDA,
@@ -83,7 +81,7 @@ export class Collection {
                     tokenProgram: TOKEN_PROGRAM_ID,
                     rent: anchor.web3.SYSVAR_RENT_PUBKEY,
                 },
-                signers: signers,
+                signers: [seller],
             }
         )
     }
@@ -95,7 +93,7 @@ export class Collection {
         buyerPayingAccount: PublicKey,
         max_price: anchor.BN,
         wanted_quantity: anchor.BN,
-        buyer: Keypair
+        buyer: Keypair,
     ) : Promise<string> {
         let [programNftVaultPDA, programNftVaultDump] = await getNftVaultPDA(nftMint)
         let comptoirAccount = await this.program.account.comptoir.fetch(this.comptoirPDA)
@@ -151,7 +149,6 @@ export class Collection {
 
     async getCollection() : Promise<IdlAccounts<ComptoirDefinition>["collection"]> {
         if (this.collectionCache) {
-            console.log("lala == ", this.collectionCache)
             return this.collectionCache
         }
         this.collectionCache = await this.program.account.collection.fetch(this.collectionPDA)

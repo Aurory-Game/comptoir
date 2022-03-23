@@ -81,8 +81,8 @@ describe('ignore creators tests', () => {
         sellerNftAssociatedTokenAccount = (await nftMint.getOrCreateAssociatedAccountInfo(seller.publicKey)).address
 
         comptoir = new Comptoir(provider)
-        await comptoir.createComptoir(seller.publicKey, comptoirMint.publicKey, 5, sellerTokenAccount.address, [seller])
-        await comptoir.createCollection("AURY", creator.publicKey, "AURY", true, seller.publicKey, null,[seller])
+        await comptoir.createComptoir(seller, comptoirMint.publicKey, 5, sellerTokenAccount.address)
+        await comptoir.createCollection(seller, "AURY", creator.publicKey, "AURY", true)
 
         let collectionPDA = (await getCollectionPDA(comptoir.comptoirPDA, "AURY"))[0]
         collection = new Collection(provider, comptoir.comptoirPDA, collectionPDA)
@@ -90,13 +90,12 @@ describe('ignore creators tests', () => {
 
     it('sell order ignore creators', async function () {
         await collection.sellAsset(
-            seller.publicKey,
             nftMint.publicKey,
             sellerNftAssociatedTokenAccount,
             sellerTokenAccount.address,
             new anchor.BN(2000),
             new anchor.BN(2),
-            [seller]
+            seller
         )
 
         let buyer = anchor.web3.Keypair.generate()
