@@ -1,4 +1,5 @@
 mod transfer;
+mod event;
 
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 use anchor_lang::prelude::*;
@@ -10,6 +11,7 @@ use anchor_spl::associated_token::AssociatedToken;
 use metaplex_token_metadata::utils::{assert_derivation};
 use crate::constant::{ASSOCIATED_TOKEN_PROGRAM};
 use crate::constant::{PREFIX, ESCROW};
+use event::*;
 
 declare_id!("CVZPBk21RauVxKgZRrhbCiMZezXRpN9i5JuHDL9NHRdQ");
 
@@ -130,6 +132,13 @@ pub mod comptoir {
         sell_order.mint = ctx.accounts.seller_nft_token_account.mint;
         sell_order.authority = ctx.accounts.payer.key();
         sell_order.destination = destination;
+
+        emit!(CreateSellOrderEvent {
+            sell_order: sell_order.key(),
+            price,
+            quantity,
+        });
+
         Ok(())
     }
 
@@ -156,9 +165,15 @@ pub mod comptoir {
         let sell_order = &mut ctx.accounts.sell_order;
         sell_order.quantity = sell_order.quantity.checked_sub(quantity_to_unlist).unwrap();
 
-        if ctx.accounts.sell_order.quantity == 0 {
-            ctx.accounts.sell_order.close(ctx.accounts.authority.to_account_info())?;
+        if sell_order.quantity == 0 {
+            sell_order.close(ctx.accounts.authority.to_account_info())?;
         }
+
+        emit!(RemoveSellOrderEvent {
+            sell_order: sell_order.key(),
+            quantity_to_unlist,
+        });
+
         Ok(())
     }
 
@@ -275,6 +290,16 @@ pub mod comptoir {
         if remaining_to_buy != 0 {
             return Err(ErrorCode::ErrCouldNotBuyEnoughItem.into());
         }
+
+        emit!(BuyEvent {
+            buyer: ctx.accounts.buyer.key(),
+            comptoir: ctx.accounts.comptoir.key(),
+            collection: ctx.accounts.collection.key(),
+            mint_metadata: ctx.accounts.mint_metadata.key(),
+            ask_quantity, 
+            max_price,
+        });
+
         Ok(())
     }
 
@@ -300,6 +325,11 @@ pub mod comptoir {
             price_proposition,
         )?;
 
+        emit!(CreateBuyOfferEvent {
+            buy_offer: buy_offer.key(),
+            price_proposition,
+        });
+
         Ok(())
     }
 
@@ -320,6 +350,11 @@ pub mod comptoir {
             ctx.accounts.buy_offer.proposed_price,
             signer,
         )?;
+
+        emit!(RemoveBuyOfferEvent {
+            buy_offer: ctx.accounts.buy_offer.key(),
+        });
+
         Ok(())
     }
 
@@ -399,6 +434,10 @@ pub mod comptoir {
             seller_share,
             signer,
         )?;
+
+        emit!(ExecuteOfferEvent {
+            buy_offer: ctx.accounts.buy_offer.key(),
+        });
 
         Ok(())
     }
