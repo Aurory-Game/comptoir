@@ -6,15 +6,10 @@ import {
     TOKEN_PROGRAM_ID,
 } from '@solana/spl-token';
 import { Token } from '@solana/spl-token';
-import { web3, Provider } from '@project-serum/anchor';
 
 const { Metadata, MetadataDataData, CreateMetadata, Creator } =
     programs.metadata;
 const Transaction = programs.Transaction;
-
-export function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 export async function createMint(
     fee_payer: PublicKey,

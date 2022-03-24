@@ -171,7 +171,7 @@ describe('comptoir with mint', () => {
             });
 
         await program.rpc.createCollection(
-            collectionDump, collectionName, creator.publicKey, collectionFee, {
+            collectionDump, collectionName, creator.publicKey, collectionFee, false, {
                 accounts: {
                     authority: admin.publicKey,
                     comptoir: comptoirPDA,

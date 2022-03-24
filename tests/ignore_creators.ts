@@ -13,7 +13,9 @@ import {getCollectionPDA, getEscrowPDA, getNftVaultPDA, getSellOrderPDA} from ".
 let provider = anchor.Provider.env()
 anchor.setProvider(provider);
 
-describe('multi sell orders test', () => {
+const program = anchor.workspace.Comptoir as Program<ComptoirProgramType>;
+
+describe('ignore creators tests', () => {
     let creator: web3.Keypair;
     let creatorTokenAccount: splToken.AccountInfo;
     let seller: web3.Keypair;
@@ -74,44 +76,27 @@ describe('multi sell orders test', () => {
         await provider.send(tx, signers);
 
         metadataPDA = metadataAddr
-        nftMint = new Token(provider.connection, mint.publicKey, TOKEN_PROGRAM_ID, creator)
+        nftMint = new Token(provider.connection, mint.publicKey, TOKEN_PROGRAM_ID, seller)
 
         sellerNftAssociatedTokenAccount = (await nftMint.getOrCreateAssociatedAccountInfo(seller.publicKey)).address
 
         comptoir = new Comptoir(provider)
         await comptoir.createComptoir(seller, comptoirMint.publicKey, 5, sellerTokenAccount.address)
-        await comptoir.createCollection(seller,"AURY", creator.publicKey, "AURY", false)
+        await comptoir.createCollection(seller, "AURY", creator.publicKey, "AURY", true)
 
         let collectionPDA = (await getCollectionPDA(comptoir.comptoirPDA, "AURY"))[0]
         collection = new Collection(provider, comptoir.comptoirPDA, collectionPDA)
     });
 
-    it('sell and buy multiple orders', async function () {
+    it('sell order ignore creators', async function () {
         await collection.sellAsset(
             nftMint.publicKey,
             sellerNftAssociatedTokenAccount,
             sellerTokenAccount.address,
             new anchor.BN(2000),
             new anchor.BN(2),
-            seller,
-       )
-
-        await collection.sellAsset(
-            nftMint.publicKey,
-            sellerNftAssociatedTokenAccount,
-            sellerTokenAccount.address,
-            new anchor.BN(2200),
-            new anchor.BN(2),
-            seller,
+            seller
         )
-
-        let sellerAfterSell = await nftMint.getAccountInfo(sellerNftAssociatedTokenAccount)
-        assert.equal(sellerAfterSell.amount.toNumber(), 1)
-
-        let nftVaultAddr = (await getNftVaultPDA(nftMint.publicKey))[0]
-        let vaultAfterSell = await nftMint.getAccountInfo(nftVaultAddr)
-
-        assert.equal(vaultAfterSell.amount.toNumber(), 4)
 
         let buyer = anchor.web3.Keypair.generate()
         let fromAirdropSignature = await provider.connection.requestAirdrop(
@@ -121,7 +106,7 @@ describe('multi sell orders test', () => {
         await provider.connection.confirmTransaction(fromAirdropSignature);
 
         let buyerTokenATA = await comptoirMint.createAssociatedTokenAccount(buyer.publicKey)
-        await comptoirMint.mintTo(buyerTokenATA, seller, [], 8400)
+        await comptoirMint.mintTo(buyerTokenATA, seller, [], 4000)
 
         let buyerNftATA = await nftMint.createAssociatedTokenAccount(buyer.publicKey)
 
@@ -129,22 +114,21 @@ describe('multi sell orders test', () => {
             nftMint.publicKey,
             [
                 (await getSellOrderPDA(sellerNftAssociatedTokenAccount, new anchor.BN(2000)))[0],
-                (await getSellOrderPDA(sellerNftAssociatedTokenAccount, new anchor.BN(2200)))[0],
             ],
             buyerNftATA,
             buyerTokenATA,
-            new anchor.BN(2200),
-            new anchor.BN(4),
+            new anchor.BN(2000),
+            new anchor.BN(2),
             buyer,
         )
 
         let buyerNftAccountAfterSell = await nftMint.getAccountInfo(buyerNftATA)
-        assert.equal(buyerNftAccountAfterSell.amount.toNumber(), 4)
+        assert.equal(buyerNftAccountAfterSell.amount.toNumber(), 2)
 
         let buyerTokenAccountAfterSell = await comptoirMint.getAccountInfo(buyerTokenATA)
         assert.equal(buyerTokenAccountAfterSell.amount.toNumber(), 0)
 
         let creatorTokenAccountAfterSell = await comptoirMint.getAccountInfo(creatorTokenAccount.address)
-        assert.equal(creatorTokenAccountAfterSell.amount.toNumber(), 840)
+        assert.equal(creatorTokenAccountAfterSell.amount.toNumber(), 0)
     });
 });

@@ -305,7 +305,7 @@ describe('comptoir with mint', () => {
 
     it('create collection', async () => {
         await program.rpc.createCollection(
-            collectionDump, collectionName, creator.publicKey, collectionFee, {
+            collectionDump, collectionName, creator.publicKey, collectionFee, false, {
                 accounts: {
                     authority: admin.publicKey,
                     comptoir: comptoirPDA,
@@ -326,7 +326,7 @@ describe('comptoir with mint', () => {
         let feeAbove100 = new anchor.BN(101)
         await assert.rejects(
             program.rpc.createCollection(
-                collectionDump, collectionName, admin.publicKey, feeAbove100, {
+                collectionDump, collectionName, admin.publicKey, feeAbove100, false, {
                     accounts: {
                         authority: admin.publicKey,
                         comptoir: comptoirPDA,
@@ -345,7 +345,7 @@ describe('comptoir with mint', () => {
         let tmpRequiredVerifier = anchor.web3.Keypair.generate().publicKey
 
         await program.rpc.updateCollection(
-            tmpFee, tmpName, tmpRequiredVerifier, {
+            tmpFee, tmpName, tmpRequiredVerifier, false, {
                 accounts: {
                     authority: admin.publicKey,
                     comptoir: comptoirPDA,
@@ -357,10 +357,11 @@ describe('comptoir with mint', () => {
         assert.equal(updatedCollection.requiredVerifier.toString(), tmpRequiredVerifier.toString());
         assert.equal(updatedCollection.symbol.toString(), tmpName);
         assert.equal(updatedCollection.fees.toString(), tmpFee.toString());
+        assert.equal(updatedCollection.ignoreCreatorFee, false);
 
         // reset
         await program.rpc.updateCollection(
-            collectionFee, collectionName, creator.publicKey, {
+            collectionFee, collectionName, creator.publicKey, false, {
                 accounts: {
                     authority: admin.publicKey,
                     comptoir: comptoirPDA,
