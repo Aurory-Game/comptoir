@@ -1,4 +1,5 @@
 mod transfer;
+mod event;
 
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 use anchor_lang::prelude::*;
@@ -10,6 +11,7 @@ use anchor_spl::associated_token::AssociatedToken;
 use metaplex_token_metadata::utils::{assert_derivation};
 use crate::constant::{ASSOCIATED_TOKEN_PROGRAM};
 use crate::constant::{PREFIX, ESCROW};
+use event::*;
 
 declare_id!("CVZPBk21RauVxKgZRrhbCiMZezXRpN9i5JuHDL9NHRdQ");
 
@@ -929,43 +931,3 @@ pub enum ErrorCode {
     #[msg("Wrong transfer program")]
     ErrWrongTransferProgram,
 }
-
-#[event]
-pub struct CreateSellOrderEvent {
-  pub sell_order: Pubkey,
-  pub price: u64,
-  pub quantity: u64,
-}
-
-#[event]
-pub struct RemoveSellOrderEvent {
-  pub sell_order: Pubkey,
-  pub quantity_to_unlist: u64
-}
-
-#[event]
-pub struct BuyEvent {
-  pub buyer: Pubkey,
-  pub comptoir: Pubkey,
-  pub collection: Pubkey,
-  pub mint_metadata: Pubkey,
-  pub ask_quantity: u64,
-  pub max_price: u64,
-}
-
-#[event]
-pub struct CreateBuyOfferEvent {
-  pub buy_offer: Pubkey,
-  pub price_proposition: u64,
-}
-
-#[event]
-pub struct RemoveBuyOfferEvent {
-  pub buy_offer: Pubkey,
-}
-
-#[event]
-pub struct ExecuteOfferEvent {
-  pub buy_offer: Pubkey,
-}
-
