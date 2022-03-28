@@ -390,6 +390,56 @@ export type Comptoir = {
       ]
     },
     {
+      "name": "addQuantityToSellOrder",
+      "accounts": [
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "sellerNftTokenAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "sellOrder",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "vault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "rent",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "nounce",
+          "type": "u8"
+        },
+        {
+          "name": "quantityToAdd",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "buy",
       "accounts": [
         {
@@ -423,7 +473,7 @@ export type Comptoir = {
           "isSigner": false
         },
         {
-          "name": "mintMetadata",
+          "name": "metadata",
           "isMut": false,
           "isSigner": false
         },
@@ -1233,6 +1283,56 @@ export const IDL: Comptoir = {
       ]
     },
     {
+      "name": "addQuantityToSellOrder",
+      "accounts": [
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "sellerNftTokenAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "sellOrder",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "vault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "rent",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "nounce",
+          "type": "u8"
+        },
+        {
+          "name": "quantityToAdd",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "buy",
       "accounts": [
         {
@@ -1266,7 +1366,7 @@ export const IDL: Comptoir = {
           "isSigner": false
         },
         {
-          "name": "mintMetadata",
+          "name": "metadata",
           "isMut": false,
           "isSigner": false
         },

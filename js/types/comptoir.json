@@ -390,6 +390,56 @@
       ]
     },
     {
+      "name": "addQuantityToSellOrder",
+      "accounts": [
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "sellerNftTokenAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "sellOrder",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "vault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "rent",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "nounce",
+          "type": "u8"
+        },
+        {
+          "name": "quantityToAdd",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "buy",
       "accounts": [
         {
@@ -423,7 +473,7 @@
           "isSigner": false
         },
         {
-          "name": "mintMetadata",
+          "name": "metadata",
           "isMut": false,
           "isSigner": false
         },
@@ -838,5 +888,8 @@
       "name": "ErrWrongTransferProgram",
       "msg": "Wrong transfer program"
     }
-  ]
+  ],
+  "metadata": {
+    "address": "CVZPBk21RauVxKgZRrhbCiMZezXRpN9i5JuHDL9NHRdQ"
+  }
 }
