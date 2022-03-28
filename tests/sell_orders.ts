@@ -133,7 +133,6 @@ describe('multi sell orders test', () => {
             ],
             buyerNftATA,
             buyerTokenATA,
-            new anchor.BN(2200),
             new anchor.BN(4),
             buyer,
         )

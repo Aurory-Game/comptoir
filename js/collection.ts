@@ -91,7 +91,6 @@ export class Collection {
         sellOrdersPDA: PublicKey[],
         buyerNftAccount: PublicKey,
         buyerPayingAccount: PublicKey,
-        max_price: anchor.BN,
         wanted_quantity: anchor.BN,
         buyer: Keypair,
     ) : Promise<string> {
@@ -125,7 +124,7 @@ export class Collection {
         }
 
         return await this.program.rpc.buy(
-            programNftVaultDump, wanted_quantity, max_price, {
+            programNftVaultDump, wanted_quantity, {
                 accounts: {
                     buyer: buyer.publicKey,
                     buyerNftTokenAccount: buyerNftAccount,
