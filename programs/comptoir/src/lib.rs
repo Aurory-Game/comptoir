@@ -444,6 +444,7 @@ pub struct CreateBuyOffer<'info> {
     PREFIX.as_bytes(),
     comptoir.key().as_ref(),
     payer.key.as_ref(),
+    nft_mint.key().as_ref(),
     price_proposition.to_string().as_bytes(),
     ESCROW.as_bytes(),
     ],

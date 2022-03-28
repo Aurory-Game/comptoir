@@ -150,6 +150,7 @@ describe('comptoir with mint', () => {
                 Buffer.from("COMPTOIR"),
                 comptoirPDA.toBuffer(),
                 buyer.publicKey.toBuffer(),
+                mint.publicKey.toBuffer(),
                 Buffer.from("1000"),
                 Buffer.from("ESCROW"),
             ],
