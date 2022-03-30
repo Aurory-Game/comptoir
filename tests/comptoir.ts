@@ -428,6 +428,30 @@ describe('comptoir with mint', () => {
         assert.equal(updatedAccount.amount, 2);
     });
 
+    it('add one item to sell order', async () => {
+        let quantity = new anchor.BN(1);
+
+        await program.rpc.addQuantityToSellOrder(
+            programNftVaultDump, quantity, {
+                accounts: {
+                    authority: seller.publicKey,
+                    sellerNftTokenAccount: sellerNftAssociatedTokenAccount,
+                    vault: programNftVaultPDA,
+                    sellOrder: sellOrderPDA,
+                    systemProgram: anchor.web3.SystemProgram.programId,
+                    tokenProgram: TOKEN_PROGRAM_ID,
+                    rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+                },
+                signers: [seller]
+            }
+        );
+
+        let sellOrder = await program.account.sellOrder.fetch(sellOrderPDA)
+        assert.equal(sellOrder.quantity.toNumber(), 4);
+        let updatedAccount = await nftMint.getAccountInfo(sellerNftAssociatedTokenAccount)
+        assert.equal(updatedAccount.amount, 1);
+    });
+
     it('buy the nft', async () => {
         let buyer = anchor.web3.Keypair.generate()
         let fromAirdropSignature = await provider.connection.requestAirdrop(
@@ -450,7 +474,7 @@ describe('comptoir with mint', () => {
                     comptoir: comptoirPDA,
                     comptoirDestAccount: adminTokenAccount.address,
                     collection: collectionPDA,
-                    mintMetadata: metadataPDA,
+                    metadata: metadataPDA,
                     vault: programNftVaultPDA,
                     systemProgram: anchor.web3.SystemProgram.programId,
                     tokenProgram: TOKEN_PROGRAM_ID,
@@ -465,7 +489,7 @@ describe('comptoir with mint', () => {
         );
 
         let sellOrder = await program.account.sellOrder.fetch(sellOrderPDA)
-        assert.equal(sellOrder.quantity.toNumber(), 2);
+        assert.equal(sellOrder.quantity.toNumber(), 3);
 
         let updatedAdminTokenAccount = await comptoirMint.getAccountInfo(adminTokenAccount.address)
         assert.equal(updatedAdminTokenAccount.amount.toNumber(), 50);
@@ -475,5 +499,11 @@ describe('comptoir with mint', () => {
 
         let updatedCreatorTokenAccount = await comptoirMint.getAccountInfo(creatorTokenAccount.address)
         assert.equal(updatedCreatorTokenAccount.amount.toNumber(), 100);
+
+        let buyerNftAtaAfterSell = await nftMint.getOrCreateAssociatedAccountInfo(buyer.publicKey)
+        assert.equal(buyerNftAtaAfterSell.amount.toNumber(), 1);
+
+        let updatedBuyerTokenAccount = await comptoirMint.getAccountInfo(buyerComptoirAta.address)
+        assert.equal(updatedBuyerTokenAccount.amount.toNumber(), 0);
     });
 });

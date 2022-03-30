@@ -7,7 +7,7 @@ import { getAssociatedTokenAddress, getNftVaultPDA, getSellOrderPDA } from './ge
 import { getMetadata } from './metaplex'
 import { programs } from '@metaplex/js'
 import * as idl from './types/comptoir.json'
-import {IdlAccounts, ProgramAccount} from "@project-serum/anchor";
+import {IdlAccounts} from "@project-serum/anchor";
 const { Metadata } =
     programs.metadata
 
@@ -86,6 +86,30 @@ export class Collection {
         )
     }
 
+    async addToSellOrder(
+        nftMint: PublicKey,
+        sellerNftAccount: PublicKey,
+        sellOrderPDA: PublicKey,
+        amount: anchor.BN,
+        seller: Keypair,
+    ): Promise<string> {
+        let [programNftVaultPDA, programNftVaultDump] = await getNftVaultPDA(nftMint)
+        return await this.program.rpc.addQuantityToSellOrder(
+            programNftVaultDump, amount, {
+                accounts: {
+                    authority: seller.publicKey,
+                    sellerNftTokenAccount: sellerNftAccount,
+                    vault: programNftVaultPDA,
+                    sellOrder: sellOrderPDA,
+                    systemProgram: anchor.web3.SystemProgram.programId,
+                    tokenProgram: TOKEN_PROGRAM_ID,
+                    rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+                },
+                signers: [seller],
+            }
+        )
+    }
+
     async buy(
         nftMint: PublicKey,
         sellOrdersPDA: PublicKey[],
@@ -133,7 +157,7 @@ export class Collection {
                     comptoir: this.comptoirPDA,
                     comptoirDestAccount: comptoirAccount.feesDestination,
                     collection: this.collectionPDA,
-                    mintMetadata: await Metadata.getPDA(metadata.mint),
+                    metadata: await Metadata.getPDA(metadata.mint),
                     vault: programNftVaultPDA,
                     systemProgram: anchor.web3.SystemProgram.programId,
                     tokenProgram: TOKEN_PROGRAM_ID,

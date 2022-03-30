@@ -140,7 +140,7 @@ pub mod comptoir {
 
         let seeds = &[
             "vault".as_bytes(),
-            ctx.accounts.sell_order.mint.as_ref(),
+            ctx.accounts.seller_nft_token_account.mint.as_ref(),
             &[nounce], ];
         let signer = &[&seeds[..]];
 
@@ -162,12 +162,27 @@ pub mod comptoir {
         Ok(())
     }
 
+    pub fn add_quantity_to_sell_order(ctx: Context<SellOrderAddQuantity>, _nounce: u8, quantity_to_add: u64) -> ProgramResult {
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.seller_nft_token_account.to_account_info(),
+            to: ctx.accounts.vault.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
+        token::transfer(cpi_ctx, quantity_to_add)?;
+
+        let sell_order = &mut ctx.accounts.sell_order;
+        sell_order.quantity = sell_order.quantity.checked_add(quantity_to_add).unwrap();
+
+        Ok(())
+    }
+
     pub fn buy<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, Buy<'info>>,
         nounce: u8, ask_quantity: u64, max_price: u64,
     ) -> ProgramResult {
         let metadata = verify_metadata_and_derivation(
-            ctx.accounts.mint_metadata.as_ref(),
+            ctx.accounts.metadata.as_ref(),
             &ctx.accounts.buyer_nft_token_account.mint.key(),
             &ctx.accounts.collection,
         )?;
@@ -411,7 +426,7 @@ pub struct CreateBuyOffer<'info> {
     payer: Signer<'info>,
 
     nft_mint: Account<'info, Mint>,
-    metadata: UncheckedAccount<'info>, //metaplex metadata account
+    metadata: UncheckedAccount<'info>,
 
     comptoir: Box<Account<'info, Comptoir>>,
     #[account(mut, constraint = collection.comptoir_key == comptoir.key())]
@@ -671,6 +686,7 @@ pub struct CreateSellOrder<'info> {
     #[account(constraint = collection.comptoir_key == comptoir.key())]
     collection: Box<Account<'info, Collection>>,
 
+    #[account(constraint = mint.key() == seller_nft_token_account.mint)]
     mint: Account<'info, Mint>,
     metadata: UncheckedAccount<'info>,
 
@@ -684,9 +700,9 @@ pub struct CreateSellOrder<'info> {
     ],
     bump = _nounce,
     payer = payer,
-    constraint = mint.key() == seller_nft_token_account.mint,
     )]
     vault: Account<'info, TokenAccount>,
+
     #[account(
     init,
     seeds = [
@@ -711,7 +727,32 @@ pub struct RemoveSellOrder<'info> {
     authority: Signer<'info>,
     #[account(mut, constraint = authority.key() == seller_nft_token_account.owner)]
     seller_nft_token_account: Account<'info, TokenAccount>,
-    #[account(mut, has_one = authority)]
+    #[account(mut, has_one = authority, constraint = seller_nft_token_account.mint == sell_order.mint)]
+    sell_order: Account<'info, SellOrder>,
+
+    #[account(
+    mut,
+    seeds = [
+    "vault".as_bytes(),
+    seller_nft_token_account.mint.as_ref(),
+    ],
+    bump = _nounce,
+    )]
+    vault: Account<'info, TokenAccount>,
+
+    system_program: Program<'info, System>,
+    token_program: Program<'info, Token>,
+    rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+#[instruction(_nounce: u8)]
+pub struct SellOrderAddQuantity<'info> {
+    #[account(mut)]
+    authority: Signer<'info>,
+    #[account(mut, constraint = authority.key() == seller_nft_token_account.owner)]
+    seller_nft_token_account: Account<'info, TokenAccount>,
+    #[account(mut, has_one = authority, constraint = seller_nft_token_account.mint == sell_order.mint)]
     sell_order: Account<'info, SellOrder>,
 
     #[account(
@@ -744,7 +785,7 @@ pub struct Buy<'info> {
     #[account(constraint = collection.comptoir_key == comptoir.key())]
     collection: Account<'info, Collection>,
 
-    mint_metadata: UncheckedAccount<'info>,
+    metadata: UncheckedAccount<'info>,
 
     #[account(
     mut,
@@ -896,16 +937,10 @@ pub enum ErrorCode {
     ErrItemPriceHigherThanMaxPrice,
     #[msg("Could not buy the required quantity of items")]
     ErrCouldNotBuyEnoughItem,
-    #[msg("Trying to buy item with mint but only accepts sol")]
-    ErrComptoirDoesNotHaveMint,
-    #[msg("Sol is not the right currency for this item")]
-    ErrComptoirDoesNotAcceptSol,
     #[msg("metadata mint does not match item mint")]
     ErrMetaDataMintDoesNotMatchItemMint,
     #[msg("nft not part of collection")]
     ErrNftNotPartOfCollection,
     #[msg("Derived key invalid")]
     DerivedKeyInvalid,
-    #[msg("Wrong transfer program")]
-    ErrWrongTransferProgram,
 }
