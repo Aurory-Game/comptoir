@@ -1,5 +1,6 @@
 mod transfer;
 
+use std::borrow::Borrow;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 use anchor_lang::prelude::*;
 use anchor_lang::AccountsClose;
@@ -7,7 +8,7 @@ use metaplex_token_metadata::state::PREFIX as METAPLEX_PREFIX;
 use metaplex_token_metadata::state::{Creator, Metadata};
 use std::str::FromStr;
 use anchor_spl::associated_token::AssociatedToken;
-use metaplex_token_metadata::utils::{assert_derivation};
+use metaplex_token_metadata::utils::{assert_derivation, assert_initialized};
 use crate::constant::{ASSOCIATED_TOKEN_PROGRAM};
 use crate::constant::{PREFIX, ESCROW};
 
@@ -870,17 +871,20 @@ impl Comptoir {
     }
 }
 
-fn verify_metadata_and_derivation(metadata_key: &AccountInfo, nft_mint: &Pubkey, collection: &Collection) -> core::result::Result<Metadata, ProgramError> {
+fn verify_metadata_and_derivation(unverified_metadata: &AccountInfo, nft_mint: &Pubkey, collection: &Collection) -> core::result::Result<Metadata, ProgramError> {
+    if unverified_metadata.data_is_empty() {
+        return Err(ErrorCode::NotInitialized.into());
+    };
     assert_derivation(
         &metaplex_token_metadata::id(),
-        metadata_key,
+        unverified_metadata,
         &[
             METAPLEX_PREFIX.as_bytes(),
             metaplex_token_metadata::id().as_ref(),
             nft_mint.as_ref(),
         ],
     )?;
-    let metadata = Metadata::from_account_info(metadata_key)?;
+    let metadata = Metadata::from_account_info(unverified_metadata)?;
     if !collection.is_part_of_collection(&metadata) {
         return Err(ErrorCode::ErrNftNotPartOfCollection.into());
     }
@@ -943,4 +947,6 @@ pub enum ErrorCode {
     ErrNftNotPartOfCollection,
     #[msg("Derived key invalid")]
     DerivedKeyInvalid,
+    #[msg("AccountNotInitialized")]
+    NotInitialized
 }
