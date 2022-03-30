@@ -139,6 +139,7 @@ pub mod comptoir {
         }
 
         let seeds = &[
+            PREFIX.as_bytes(),
             "vault".as_bytes(),
             ctx.accounts.seller_nft_token_account.mint.as_ref(),
             &[nounce], ];
@@ -203,6 +204,7 @@ pub mod comptoir {
         }
 
         let seeds = &[
+            PREFIX.as_bytes(),
             "vault".as_bytes(),
             ctx.accounts.buyer_nft_token_account.mint.as_ref(),
             &[nounce], ];
@@ -691,6 +693,7 @@ pub struct CreateSellOrder<'info> {
     token::mint = mint,
     token::authority = vault,
     seeds = [
+    PREFIX.as_bytes(),
     "vault".as_bytes(),
     seller_nft_token_account.mint.as_ref(),
     ],
@@ -729,6 +732,7 @@ pub struct RemoveSellOrder<'info> {
     #[account(
     mut,
     seeds = [
+    PREFIX.as_bytes(),
     "vault".as_bytes(),
     seller_nft_token_account.mint.as_ref(),
     ],
@@ -754,6 +758,7 @@ pub struct SellOrderAddQuantity<'info> {
     #[account(
     mut,
     seeds = [
+    PREFIX.as_bytes(),
     "vault".as_bytes(),
     seller_nft_token_account.mint.as_ref(),
     ],
@@ -786,6 +791,7 @@ pub struct Buy<'info> {
     #[account(
     mut,
     seeds = [
+    PREFIX.as_bytes(),
     "vault".as_bytes(),
     buyer_nft_token_account.mint.as_ref()
     ],

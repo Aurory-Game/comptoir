@@ -132,7 +132,7 @@ describe('comptoir with mint', () => {
         );
 
         [programNftVaultPDA, programNftVaultDump] = await anchor.web3.PublicKey.findProgramAddress(
-            [Buffer.from("vault"), nftMint.publicKey.toBuffer()],
+            [Buffer.from('COMPTOIR'), Buffer.from("vault"), nftMint.publicKey.toBuffer()],
             program.programId,
         );
         [sellOrderPDA, sellOrderDump] = await anchor.web3.PublicKey.findProgramAddress(

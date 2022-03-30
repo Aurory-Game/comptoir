@@ -39,7 +39,7 @@ export const getCollectionPDA = async (comptoirPDA: PublicKey, symbol: string): 
 
 export const getNftVaultPDA = async (nftMint: PublicKey): Promise<[PublicKey, number]> => {
     return await anchor.web3.PublicKey.findProgramAddress(
-        [Buffer.from('vault'), nftMint.toBuffer()],
+        [Buffer.from('COMPTOIR'), Buffer.from('vault'), nftMint.toBuffer()],
         COMPTOIR_PROGRAM_ID,
     )
 }
