@@ -117,7 +117,6 @@ describe('ignore creators tests', () => {
             ],
             buyerNftATA,
             buyerTokenATA,
-            new anchor.BN(2000),
             new anchor.BN(2),
             buyer,
         )

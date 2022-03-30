@@ -179,7 +179,7 @@ pub mod comptoir {
 
     pub fn buy<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, Buy<'info>>,
-        nounce: u8, ask_quantity: u64, max_price: u64,
+        nounce: u8, ask_quantity: u64,
     ) -> ProgramResult {
         let metadata = verify_metadata_and_derivation(
             ctx.accounts.metadata.as_ref(),
@@ -220,10 +220,6 @@ pub mod comptoir {
             let mut sell_order = sell_order_result.unwrap();
             index = index + 1;
             assert_eq!(sell_order.mint, ctx.accounts.buyer_nft_token_account.mint.key());
-
-            if sell_order.price > max_price {
-                return Err(ErrorCode::ErrItemPriceHigherThanMaxPrice.into());
-            }
 
             let mut to_buy = remaining_to_buy;
             if sell_order.quantity < to_buy {
@@ -933,8 +929,6 @@ pub enum ErrorCode {
     ErrFeeShouldLowerOrEqualThan100,
     #[msg("Trying to unlist more than owned")]
     ErrTryingToUnlistMoreThanOwned,
-    #[msg("Item price got higher than max price")]
-    ErrItemPriceHigherThanMaxPrice,
     #[msg("Could not buy the required quantity of items")]
     ErrCouldNotBuyEnoughItem,
     #[msg("metadata mint does not match item mint")]

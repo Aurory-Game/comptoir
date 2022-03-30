@@ -501,10 +501,6 @@ export type Comptoir = {
         {
           "name": "askQuantity",
           "type": "u64"
-        },
-        {
-          "name": "maxPrice",
-          "type": "u64"
         }
       ]
     },
@@ -850,41 +846,36 @@ export type Comptoir = {
     },
     {
       "code": 6002,
-      "name": "ErrItemPriceHigherThanMaxPrice",
-      "msg": "Item price got higher than max price"
-    },
-    {
-      "code": 6003,
       "name": "ErrCouldNotBuyEnoughItem",
       "msg": "Could not buy the required quantity of items"
     },
     {
-      "code": 6004,
+      "code": 6003,
       "name": "ErrComptoirDoesNotHaveMint",
       "msg": "Trying to buy item with mint but only accepts sol"
     },
     {
-      "code": 6005,
+      "code": 6004,
       "name": "ErrComptoirDoesNotAcceptSol",
       "msg": "Sol is not the right currency for this item"
     },
     {
-      "code": 6006,
+      "code": 6005,
       "name": "ErrMetaDataMintDoesNotMatchItemMint",
       "msg": "metadata mint does not match item mint"
     },
     {
-      "code": 6007,
+      "code": 6006,
       "name": "ErrNftNotPartOfCollection",
       "msg": "nft not part of collection"
     },
     {
-      "code": 6008,
+      "code": 6007,
       "name": "DerivedKeyInvalid",
       "msg": "Derived key invalid"
     },
     {
-      "code": 6009,
+      "code": 6008,
       "name": "ErrWrongTransferProgram",
       "msg": "Wrong transfer program"
     }
@@ -1394,10 +1385,6 @@ export const IDL: Comptoir = {
         {
           "name": "askQuantity",
           "type": "u64"
-        },
-        {
-          "name": "maxPrice",
-          "type": "u64"
         }
       ]
     },
@@ -1743,41 +1730,36 @@ export const IDL: Comptoir = {
     },
     {
       "code": 6002,
-      "name": "ErrItemPriceHigherThanMaxPrice",
-      "msg": "Item price got higher than max price"
-    },
-    {
-      "code": 6003,
       "name": "ErrCouldNotBuyEnoughItem",
       "msg": "Could not buy the required quantity of items"
     },
     {
-      "code": 6004,
+      "code": 6003,
       "name": "ErrComptoirDoesNotHaveMint",
       "msg": "Trying to buy item with mint but only accepts sol"
     },
     {
-      "code": 6005,
+      "code": 6004,
       "name": "ErrComptoirDoesNotAcceptSol",
       "msg": "Sol is not the right currency for this item"
     },
     {
-      "code": 6006,
+      "code": 6005,
       "name": "ErrMetaDataMintDoesNotMatchItemMint",
       "msg": "metadata mint does not match item mint"
     },
     {
-      "code": 6007,
+      "code": 6006,
       "name": "ErrNftNotPartOfCollection",
       "msg": "nft not part of collection"
     },
     {
-      "code": 6008,
+      "code": 6007,
       "name": "DerivedKeyInvalid",
       "msg": "Derived key invalid"
     },
     {
-      "code": 6009,
+      "code": 6008,
       "name": "ErrWrongTransferProgram",
       "msg": "Wrong transfer program"
     }

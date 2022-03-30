@@ -464,9 +464,8 @@ describe('comptoir with mint', () => {
         await comptoirMint.mintTo(buyerComptoirAta.address, admin, [], 1000)
 
         let quantity_to_buy = new anchor.BN(1)
-        let max_price = new anchor.BN(1000)
         await program.rpc.buy(
-            programNftVaultDump, quantity_to_buy, max_price, {
+            programNftVaultDump, quantity_to_buy, {
                 accounts: {
                     buyer: buyer.publicKey,
                     buyerNftTokenAccount: buyerNftAta.address,

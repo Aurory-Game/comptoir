@@ -62,7 +62,6 @@ async function workflow(comptoirMint: PublicKey, nftMint: PublicKey) {
         [(await getSellOrderPDA(userNftAccount, sellPrice))[0]],
         userNftAccount,
         userTokenAccount,
-        sellPrice,
         sellQuantity,
         anchor.Wallet.local().payer
     )
