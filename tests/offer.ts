@@ -27,11 +27,11 @@ describe('comptoir with mint', () => {
     let comptoirPDA: web3.PublicKey;
     let comptoirDump: number;
     let comptoirMint: splToken.Token;
-    let fee = new anchor.BN(20);
+    let fee = new anchor.BN(200);
     let collectionName = "AURY"
     let collectionPDA: web3.PublicKey;
     let collectionDump: number
-    let collectionFee = new anchor.BN(5);
+    let collectionFee = new anchor.BN(500);
     let nftMint: splToken.Token;
     let metadataPDA: web3.PublicKey;
     let escrowPDA: web3.PublicKey;

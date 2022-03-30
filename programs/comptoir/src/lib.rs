@@ -245,7 +245,7 @@ pub mod comptoir {
             if !ctx.accounts.collection.ignore_creator_fee {
                 creators_share = calculate_fee(total_amount, metadata.data.seller_fee_basis_points, 10000);
             }
-            let comptoir_share = calculate_fee(total_amount, comptoir_fee, 100);
+            let comptoir_share = calculate_fee(total_amount, comptoir_fee, 10000);
             let seller_share = total_amount.checked_sub(creators_share).unwrap().checked_sub(comptoir_share).unwrap();
 
             pay(
@@ -370,7 +370,7 @@ pub mod comptoir {
         if !ctx.accounts.collection.ignore_creator_fee {
             creators_share = calculate_fee(total_amount, metadata.data.seller_fee_basis_points, 10000);
         }
-        let comptoir_share = calculate_fee(total_amount, comptoir_fee, 100);
+        let comptoir_share = calculate_fee(total_amount, comptoir_fee, 10000);
         let seller_share = total_amount.checked_sub(creators_share).unwrap().checked_sub(comptoir_share).unwrap();
 
         let seeds = &[
@@ -853,8 +853,8 @@ impl Collection {
 
     pub fn validate(&self) -> ProgramResult {
         if let Some(fee) = self.fees {
-            if fee > 100 {
-                return Err(ErrorCode::ErrFeeShouldLowerOrEqualThan100.into());
+            if fee > 1000 {
+                return Err(ErrorCode::ErrFeeShouldLowerOrEqualThan10000.into());
             }
         }
         Ok(())
@@ -863,8 +863,8 @@ impl Collection {
 
 impl Comptoir {
     pub fn validate(&self) -> ProgramResult {
-        if self.fees > 100 {
-            return Err(ErrorCode::ErrFeeShouldLowerOrEqualThan100.into());
+        if self.fees > 1000 {
+            return Err(ErrorCode::ErrFeeShouldLowerOrEqualThan10000.into());
         }
         Ok(())
     }
@@ -931,8 +931,8 @@ fn verify_and_get_creators<'a, 'b, 'c, 'info>(creators: Vec<Creator>, remaining_
 
 #[error]
 pub enum ErrorCode {
-    #[msg("Fee should be <= 100")]
-    ErrFeeShouldLowerOrEqualThan100,
+    #[msg("Fee should be <= 10000")]
+    ErrFeeShouldLowerOrEqualThan10000,
     #[msg("Trying to unlist more than owned")]
     ErrTryingToUnlistMoreThanOwned,
     #[msg("Could not buy the required quantity of items")]

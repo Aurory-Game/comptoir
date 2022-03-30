@@ -23,11 +23,11 @@ describe('comptoir with mint', () => {
     let comptoirPDA: web3.PublicKey;
     let comptoirDump: number;
     let comptoirMint: splToken.Token;
-    let fee = new anchor.BN(20);
+    let fee = new anchor.BN(200);
     let collectionName = "AURY"
     let collectionPDA: web3.PublicKey;
     let collectionDump: number
-    let collectionFee = new anchor.BN(5);
+    let collectionFee = new anchor.BN(500);
     let nftMint: splToken.Token;
     let metadataPDA: web3.PublicKey;
     let sellerNftAssociatedTokenAccount: web3.PublicKey;
@@ -166,7 +166,7 @@ describe('comptoir with mint', () => {
         assert.equal(createdComptoir.feesDestination.toString(), adminTokenAccount.address.toString());
     });
 
-    it('fail: create comptoir fee > 100', async () => {
+    it('fail: create comptoir fee > 10000', async () => {
         let tmpAuthority = anchor.web3.Keypair.generate()
         let fromAirdropSignature = await provider.connection.requestAirdrop(
             tmpAuthority.publicKey,
@@ -181,7 +181,7 @@ describe('comptoir with mint', () => {
             [Buffer.from("COMPTOIR"), tmpAuthority.publicKey.toBuffer()],
             program.programId,
         )
-        let feeAbove100 = new anchor.BN(101)
+        let feeAbove100 = new anchor.BN(10001)
             let [escrowPDA, escrowDump] = await anchor.web3.PublicKey.findProgramAddress(
             [
                 Buffer.from("COMPTOIR"),
@@ -322,8 +322,8 @@ describe('comptoir with mint', () => {
         assert.equal(createdCollection.fees.toString(), collectionFee.toString());
     });
 
-    it('fail: create collection fee > 100', async () => {
-        let feeAbove100 = new anchor.BN(101)
+    it('fail: create collection fee > 10000', async () => {
+        let feeAbove100 = new anchor.BN(10001)
         await assert.rejects(
             program.rpc.createCollection(
                 collectionDump, collectionName, admin.publicKey, feeAbove100, false, {
