@@ -43,14 +43,6 @@ export type Comptoir = {
       ],
       "args": [
         {
-          "name": "comptoirNounce",
-          "type": "u8"
-        },
-        {
-          "name": "escrowNounce",
-          "type": "u8"
-        },
-        {
           "name": "mint",
           "type": "publicKey"
         },
@@ -144,10 +136,6 @@ export type Comptoir = {
       ],
       "args": [
         {
-          "name": "escrowNounce",
-          "type": "u8"
-        },
-        {
           "name": "mint",
           "type": "publicKey"
         },
@@ -187,10 +175,6 @@ export type Comptoir = {
         }
       ],
       "args": [
-        {
-          "name": "nounce",
-          "type": "u8"
-        },
         {
           "name": "symbol",
           "type": "string"
@@ -318,14 +302,6 @@ export type Comptoir = {
       ],
       "args": [
         {
-          "name": "nounce",
-          "type": "u8"
-        },
-        {
-          "name": "sellOrderNounce",
-          "type": "u8"
-        },
-        {
           "name": "price",
           "type": "u64"
         },
@@ -380,10 +356,6 @@ export type Comptoir = {
       ],
       "args": [
         {
-          "name": "nounce",
-          "type": "u8"
-        },
-        {
           "name": "quantityToUnlist",
           "type": "u64"
         }
@@ -429,10 +401,6 @@ export type Comptoir = {
         }
       ],
       "args": [
-        {
-          "name": "nounce",
-          "type": "u8"
-        },
         {
           "name": "quantityToAdd",
           "type": "u64"
@@ -494,10 +462,6 @@ export type Comptoir = {
         }
       ],
       "args": [
-        {
-          "name": "nounce",
-          "type": "u8"
-        },
         {
           "name": "askQuantity",
           "type": "u64"
@@ -575,14 +539,6 @@ export type Comptoir = {
       ],
       "args": [
         {
-          "name": "nounce",
-          "type": "u8"
-        },
-        {
-          "name": "buyOfferNounce",
-          "type": "u8"
-        },
-        {
           "name": "priceProposition",
           "type": "u64"
         }
@@ -632,12 +588,7 @@ export type Comptoir = {
           "isSigner": false
         }
       ],
-      "args": [
-        {
-          "name": "nounce",
-          "type": "u8"
-        }
-      ]
+      "args": []
     },
     {
       "name": "executeOffer",
@@ -713,12 +664,7 @@ export type Comptoir = {
           "isSigner": false
         }
       ],
-      "args": [
-        {
-          "name": "escrowNounce",
-          "type": "u8"
-        }
-      ]
+      "args": []
     }
   ],
   "accounts": [
@@ -836,8 +782,8 @@ export type Comptoir = {
   "errors": [
     {
       "code": 6000,
-      "name": "ErrFeeShouldLowerOrEqualThan100",
-      "msg": "Fee should be <= 100"
+      "name": "ErrFeeShouldLowerOrEqualThan10000",
+      "msg": "Fee should be <= 10000"
     },
     {
       "code": 6001,
@@ -851,33 +797,23 @@ export type Comptoir = {
     },
     {
       "code": 6003,
-      "name": "ErrComptoirDoesNotHaveMint",
-      "msg": "Trying to buy item with mint but only accepts sol"
-    },
-    {
-      "code": 6004,
-      "name": "ErrComptoirDoesNotAcceptSol",
-      "msg": "Sol is not the right currency for this item"
-    },
-    {
-      "code": 6005,
       "name": "ErrMetaDataMintDoesNotMatchItemMint",
       "msg": "metadata mint does not match item mint"
     },
     {
-      "code": 6006,
+      "code": 6004,
       "name": "ErrNftNotPartOfCollection",
       "msg": "nft not part of collection"
     },
     {
-      "code": 6007,
+      "code": 6005,
       "name": "DerivedKeyInvalid",
       "msg": "Derived key invalid"
     },
     {
-      "code": 6008,
-      "name": "ErrWrongTransferProgram",
-      "msg": "Wrong transfer program"
+      "code": 6006,
+      "name": "NotInitialized",
+      "msg": "AccountNotInitialized"
     }
   ]
 };
@@ -927,14 +863,6 @@ export const IDL: Comptoir = {
       ],
       "args": [
         {
-          "name": "comptoirNounce",
-          "type": "u8"
-        },
-        {
-          "name": "escrowNounce",
-          "type": "u8"
-        },
-        {
           "name": "mint",
           "type": "publicKey"
         },
@@ -1028,10 +956,6 @@ export const IDL: Comptoir = {
       ],
       "args": [
         {
-          "name": "escrowNounce",
-          "type": "u8"
-        },
-        {
           "name": "mint",
           "type": "publicKey"
         },
@@ -1071,10 +995,6 @@ export const IDL: Comptoir = {
         }
       ],
       "args": [
-        {
-          "name": "nounce",
-          "type": "u8"
-        },
         {
           "name": "symbol",
           "type": "string"
@@ -1202,14 +1122,6 @@ export const IDL: Comptoir = {
       ],
       "args": [
         {
-          "name": "nounce",
-          "type": "u8"
-        },
-        {
-          "name": "sellOrderNounce",
-          "type": "u8"
-        },
-        {
           "name": "price",
           "type": "u64"
         },
@@ -1264,10 +1176,6 @@ export const IDL: Comptoir = {
       ],
       "args": [
         {
-          "name": "nounce",
-          "type": "u8"
-        },
-        {
           "name": "quantityToUnlist",
           "type": "u64"
         }
@@ -1313,10 +1221,6 @@ export const IDL: Comptoir = {
         }
       ],
       "args": [
-        {
-          "name": "nounce",
-          "type": "u8"
-        },
         {
           "name": "quantityToAdd",
           "type": "u64"
@@ -1378,10 +1282,6 @@ export const IDL: Comptoir = {
         }
       ],
       "args": [
-        {
-          "name": "nounce",
-          "type": "u8"
-        },
         {
           "name": "askQuantity",
           "type": "u64"
@@ -1459,14 +1359,6 @@ export const IDL: Comptoir = {
       ],
       "args": [
         {
-          "name": "nounce",
-          "type": "u8"
-        },
-        {
-          "name": "buyOfferNounce",
-          "type": "u8"
-        },
-        {
           "name": "priceProposition",
           "type": "u64"
         }
@@ -1516,12 +1408,7 @@ export const IDL: Comptoir = {
           "isSigner": false
         }
       ],
-      "args": [
-        {
-          "name": "nounce",
-          "type": "u8"
-        }
-      ]
+      "args": []
     },
     {
       "name": "executeOffer",
@@ -1597,12 +1484,7 @@ export const IDL: Comptoir = {
           "isSigner": false
         }
       ],
-      "args": [
-        {
-          "name": "escrowNounce",
-          "type": "u8"
-        }
-      ]
+      "args": []
     }
   ],
   "accounts": [
@@ -1720,8 +1602,8 @@ export const IDL: Comptoir = {
   "errors": [
     {
       "code": 6000,
-      "name": "ErrFeeShouldLowerOrEqualThan100",
-      "msg": "Fee should be <= 100"
+      "name": "ErrFeeShouldLowerOrEqualThan10000",
+      "msg": "Fee should be <= 10000"
     },
     {
       "code": 6001,
@@ -1735,33 +1617,23 @@ export const IDL: Comptoir = {
     },
     {
       "code": 6003,
-      "name": "ErrComptoirDoesNotHaveMint",
-      "msg": "Trying to buy item with mint but only accepts sol"
-    },
-    {
-      "code": 6004,
-      "name": "ErrComptoirDoesNotAcceptSol",
-      "msg": "Sol is not the right currency for this item"
-    },
-    {
-      "code": 6005,
       "name": "ErrMetaDataMintDoesNotMatchItemMint",
       "msg": "metadata mint does not match item mint"
     },
     {
-      "code": 6006,
+      "code": 6004,
       "name": "ErrNftNotPartOfCollection",
       "msg": "nft not part of collection"
     },
     {
-      "code": 6007,
+      "code": 6005,
       "name": "DerivedKeyInvalid",
       "msg": "Derived key invalid"
     },
     {
-      "code": 6008,
-      "name": "ErrWrongTransferProgram",
-      "msg": "Wrong transfer program"
+      "code": 6006,
+      "name": "NotInitialized",
+      "msg": "AccountNotInitialized"
     }
   ]
 };

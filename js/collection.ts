@@ -1,14 +1,15 @@
 import * as anchor from '@project-serum/anchor'
 import {Comptoir as ComptoirDefinition, IDL} from './types/comptoir'
-import { COMPTOIR_PROGRAM_ID } from './constant'
-import { Keypair, PublicKey } from '@solana/web3.js'
-import { TOKEN_PROGRAM_ID } from '@solana/spl-token'
-import { getAssociatedTokenAddress, getNftVaultPDA, getSellOrderPDA } from './getPDAs'
-import { getMetadata } from './metaplex'
-import { programs } from '@metaplex/js'
+import {COMPTOIR_PROGRAM_ID} from './constant'
+import {Keypair, PublicKey} from '@solana/web3.js'
+import {TOKEN_PROGRAM_ID} from '@solana/spl-token'
+import {getAssociatedTokenAddress, getNftVaultPDA, getSellOrderPDA} from './getPDAs'
+import {getMetadata} from './metaplex'
+import {programs} from '@metaplex/js'
 import * as idl from './types/comptoir.json'
 import {IdlAccounts} from "@project-serum/anchor";
-const { Metadata } =
+
+const {Metadata} =
     programs.metadata
 
 export class Collection {
@@ -38,28 +39,25 @@ export class Collection {
         amount: anchor.BN,
         seller: Keypair
     ): Promise<string> {
-        let [programNftVaultPDA, programNftVaultDump] = await getNftVaultPDA(nftMint)
-        let [sellOrderPDA, sellOrderDump] = await getSellOrderPDA(sellerNftAccount, price)
+        let programNftVaultPDA = await getNftVaultPDA(nftMint)
+        let sellOrderPDA = await getSellOrderPDA(sellerNftAccount, price)
 
         let metadataPDA = await Metadata.getPDA(nftMint)
-        return await this.program.rpc.createSellOrder(
-            programNftVaultDump, sellOrderDump, price, amount, sellerDestination, {
-                accounts: {
-                    payer: seller.publicKey,
-                    sellerNftTokenAccount: sellerNftAccount,
-                    comptoir: this.comptoirPDA,
-                    collection: this.collectionPDA,
-                    mint: nftMint,
-                    metadata: metadataPDA,
-                    vault: programNftVaultPDA,
-                    sellOrder: sellOrderPDA,
-                    systemProgram: anchor.web3.SystemProgram.programId,
-                    tokenProgram: TOKEN_PROGRAM_ID,
-                    rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-                },
-                signers: [seller],
+        return await this.program.methods.createSellOrder(price, amount, sellerDestination).accounts(
+            {
+                payer: seller.publicKey,
+                sellerNftTokenAccount: sellerNftAccount,
+                comptoir: this.comptoirPDA,
+                collection: this.collectionPDA,
+                mint: nftMint,
+                metadata: metadataPDA,
+                vault: programNftVaultPDA,
+                sellOrder: sellOrderPDA,
+                systemProgram: anchor.web3.SystemProgram.programId,
+                tokenProgram: TOKEN_PROGRAM_ID,
+                rent: anchor.web3.SYSVAR_RENT_PUBKEY,
             }
-        )
+        ).signers([seller]).rpc()
     }
 
     async removeSellOrder(
@@ -69,21 +67,16 @@ export class Collection {
         amount: anchor.BN,
         seller: Keypair,
     ): Promise<string> {
-        let [programNftVaultPDA, programNftVaultDump] = await getNftVaultPDA(nftMint)
-        return await this.program.rpc.removeSellOrder(
-            programNftVaultDump, amount, {
-                accounts: {
-                    authority: seller.publicKey,
-                    sellerNftTokenAccount: sellerNftAccount,
-                    vault: programNftVaultPDA,
-                    sellOrder: sellOrderPDA,
-                    systemProgram: anchor.web3.SystemProgram.programId,
-                    tokenProgram: TOKEN_PROGRAM_ID,
-                    rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-                },
-                signers: [seller],
-            }
-        )
+        let programNftVaultPDA = await getNftVaultPDA(nftMint)
+        return await this.program.methods.removeSellOrder(amount).accounts({
+            authority: seller.publicKey,
+            sellerNftTokenAccount: sellerNftAccount,
+            vault: programNftVaultPDA,
+            sellOrder: sellOrderPDA,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+        }).signers([seller]).rpc()
     }
 
     async addToSellOrder(
@@ -93,21 +86,16 @@ export class Collection {
         amount: anchor.BN,
         seller: Keypair,
     ): Promise<string> {
-        let [programNftVaultPDA, programNftVaultDump] = await getNftVaultPDA(nftMint)
-        return await this.program.rpc.addQuantityToSellOrder(
-            programNftVaultDump, amount, {
-                accounts: {
-                    authority: seller.publicKey,
-                    sellerNftTokenAccount: sellerNftAccount,
-                    vault: programNftVaultPDA,
-                    sellOrder: sellOrderPDA,
-                    systemProgram: anchor.web3.SystemProgram.programId,
-                    tokenProgram: TOKEN_PROGRAM_ID,
-                    rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-                },
-                signers: [seller],
-            }
-        )
+        let programNftVaultPDA = await getNftVaultPDA(nftMint)
+        return await this.program.methods.addQuantityToSellOrder(amount).accounts({
+            authority: seller.publicKey,
+            sellerNftTokenAccount: sellerNftAccount,
+            vault: programNftVaultPDA,
+            sellOrder: sellOrderPDA,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+        }).signers([seller]).rpc()
     }
 
     async buy(
@@ -117,13 +105,13 @@ export class Collection {
         buyerPayingAccount: PublicKey,
         wanted_quantity: anchor.BN,
         buyer: Keypair,
-    ) : Promise<string> {
-        let [programNftVaultPDA, programNftVaultDump] = await getNftVaultPDA(nftMint)
+    ): Promise<string> {
+        let programNftVaultPDA = await getNftVaultPDA(nftMint)
         let comptoirAccount = await this.program.account.comptoir.fetch(this.comptoirPDA)
 
         let metadata = await getMetadata(
-                anchor.getProvider().connection,
-                nftMint,
+            anchor.getProvider().connection,
+            nftMint,
         )
 
         let collection = await this.getCollection()
@@ -134,8 +122,8 @@ export class Collection {
                 let creatorAddress = new PublicKey(creator.address)
                 let creatorATA = await getAssociatedTokenAddress(creatorAddress, comptoirAccount.mint)
 
-                creatorsAccounts.push (
-                    { pubkey: creatorATA, isWritable: true, isSigner: false },
+                creatorsAccounts.push(
+                    {pubkey: creatorATA, isWritable: true, isSigner: false},
                 )
             }
         }
@@ -143,13 +131,11 @@ export class Collection {
         let sellOrders = []
         for (let sellOrderPDA of sellOrdersPDA) {
             let so = await this.program.account.sellOrder.fetch(sellOrderPDA)
-            sellOrders.push({ pubkey: sellOrderPDA, isWritable: true, isSigner: false })
-            sellOrders.push({ pubkey: so.destination, isWritable: true, isSigner: false })
+            sellOrders.push({pubkey: sellOrderPDA, isWritable: true, isSigner: false})
+            sellOrders.push({pubkey: so.destination, isWritable: true, isSigner: false})
         }
 
-        return await this.program.rpc.buy(
-            programNftVaultDump, wanted_quantity, {
-                accounts: {
+        return await this.program.methods.buy(wanted_quantity).accounts({
                     buyer: buyer.publicKey,
                     buyerNftTokenAccount: buyerNftAccount,
                     buyerPayingTokenAccount: buyerPayingAccount,
@@ -160,17 +146,13 @@ export class Collection {
                     vault: programNftVaultPDA,
                     systemProgram: anchor.web3.SystemProgram.programId,
                     tokenProgram: TOKEN_PROGRAM_ID,
-                },
-                remainingAccounts: [
+                }).remainingAccounts([
                     ...creatorsAccounts,
                     ...sellOrders,
-                ],
-                signers: [buyer],
-            }
-        )
+                ]).signers([buyer]).rpc()
     }
 
-    async getCollection() : Promise<IdlAccounts<ComptoirDefinition>["collection"]> {
+    async getCollection(): Promise<IdlAccounts<ComptoirDefinition>["collection"]> {
         if (this.collectionCache) {
             return this.collectionCache
         }

@@ -1,4 +1,4 @@
-use anchor_lang::prelude::{AccountInfo, CpiContext, ProgramResult};
+use anchor_lang::prelude::{AccountInfo, CpiContext, Result};
 use anchor_spl::token;
 use anchor_spl::token::Transfer;
 
@@ -9,7 +9,7 @@ pub fn pay<'info>(
     authority: AccountInfo<'info>,
     token_program: AccountInfo<'info>,
     amount: u64,
-) -> ProgramResult {
+) -> Result<()> {
     let cpi_accounts = Transfer {
         from: payer,
         to: dest,
@@ -26,7 +26,7 @@ pub fn pay_with_signer<'info>(
     token_program: AccountInfo<'info>,
     amount: u64,
     signer: &[&[&[u8]]]
-) -> ProgramResult {
+) -> Result<()> {
     let cpi_accounts = Transfer {
         from: payer,
         to: dest,

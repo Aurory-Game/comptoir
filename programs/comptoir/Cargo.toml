@@ -15,10 +15,11 @@ no-idl = []
 no-log-ix-name = []
 cpi = ["no-entrypoint"]
 default = []
+init-if-needed = []
 
 [dependencies]
-anchor-lang = "0.20.1"
-anchor-spl = "0.20.1"
+anchor-lang = {version = "0.23.0", features = ["init-if-needed"]}
+anchor-spl = "0.23.0"
 spl-token = { version = "3.2",  features = ["no-entrypoint"] }
 metaplex-token-metadata = { git = "https://github.com/metaplex-foundation/metaplex", rev = "8a69c0d01708b9bbd9cf34fd11bd57669773083d", features = [
     "no-entrypoint",
