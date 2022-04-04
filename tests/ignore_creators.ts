@@ -84,7 +84,7 @@ describe('ignore creators tests', () => {
         await comptoir.createComptoir(seller, comptoirMint.publicKey, 5, sellerTokenAccount.address)
         await comptoir.createCollection(seller, "AURY", creator.publicKey, "AURY", true)
 
-        let collectionPDA = (await getCollectionPDA(comptoir.comptoirPDA, "AURY"))[0]
+        let collectionPDA = await getCollectionPDA(comptoir.comptoirPDA, "AURY")
         collection = new Collection(provider, comptoir.comptoirPDA, collectionPDA)
     });
 
@@ -113,7 +113,7 @@ describe('ignore creators tests', () => {
         await collection.buy(
             nftMint.publicKey,
             [
-                (await getSellOrderPDA(sellerNftAssociatedTokenAccount, new anchor.BN(2000)))[0],
+                await getSellOrderPDA(sellerNftAssociatedTokenAccount, new anchor.BN(2000)),
             ],
             buyerNftATA,
             buyerTokenATA,

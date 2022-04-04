@@ -1,6 +1,5 @@
 mod transfer;
 
-use std::borrow::Borrow;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 use anchor_lang::prelude::*;
 use anchor_lang::AccountsClose;
@@ -8,7 +7,7 @@ use metaplex_token_metadata::state::PREFIX as METAPLEX_PREFIX;
 use metaplex_token_metadata::state::{Creator, Metadata};
 use std::str::FromStr;
 use anchor_spl::associated_token::AssociatedToken;
-use metaplex_token_metadata::utils::{assert_derivation, assert_initialized};
+use metaplex_token_metadata::utils::{assert_derivation};
 use crate::constant::{ASSOCIATED_TOKEN_PROGRAM};
 use crate::constant::{PREFIX, ESCROW};
 
@@ -20,9 +19,8 @@ pub mod comptoir {
     use super::*;
 
     pub fn create_comptoir(
-        ctx: Context<CreateComptoir>,
-        _comptoir_nounce: u8, _escrow_nounce: u8, mint: Pubkey, fees: u16, fees_destination: Pubkey, authority: Pubkey,
-    ) -> ProgramResult {
+        ctx: Context<CreateComptoir>, mint: Pubkey, fees: u16, fees_destination: Pubkey, authority: Pubkey,
+    ) -> Result<()> {
         let comptoir = &mut ctx.accounts.comptoir;
 
         comptoir.fees = fees;
@@ -39,7 +37,7 @@ pub mod comptoir {
         optional_fees: Option<u16>,
         optional_fees_destination: Option<Pubkey>,
         optional_authority: Option<Pubkey>,
-    ) -> ProgramResult {
+    ) -> Result<()> {
         let comptoir = &mut ctx.accounts.comptoir;
 
         if let Some(fees) = optional_fees {
@@ -57,10 +55,9 @@ pub mod comptoir {
 
     pub fn update_comptoir_mint(
         ctx: Context<UpdateComptoirMint>,
-        _escrow_nounce: u8,
         mint: Pubkey,
         fees_destination: Pubkey,
-    ) -> ProgramResult {
+    ) -> Result<()> {
         let comptoir = &mut ctx.accounts.comptoir;
         comptoir.mint = mint;
         comptoir.fees_destination = fees_destination;
@@ -69,9 +66,8 @@ pub mod comptoir {
     }
 
     pub fn create_collection(
-        ctx: Context<CreateCollection>,
-        _nounce: u8, symbol: String, required_verifier: Pubkey, fee: Option<u16>, ignore_fee: bool,
-    ) -> ProgramResult {
+        ctx: Context<CreateCollection>, symbol: String, required_verifier: Pubkey, fee: Option<u16>, ignore_fee: bool,
+    ) -> Result<()> {
         let collection = &mut ctx.accounts.collection;
 
         collection.comptoir_key = ctx.accounts.comptoir.key();
@@ -90,7 +86,7 @@ pub mod comptoir {
         optional_symbol: Option<String>,
         optional_required_verifier: Option<Pubkey>,
         optional_ignore_creator_fee: Option<bool>,
-    ) -> ProgramResult {
+    ) -> Result<()> {
         let collection = &mut ctx.accounts.collection;
 
         if let Some(fee_share) = optional_fee {
@@ -110,7 +106,7 @@ pub mod comptoir {
         Ok(())
     }
 
-    pub fn create_sell_order(ctx: Context<CreateSellOrder>, _nounce: u8, _sell_order_nounce: u8, price: u64, quantity: u64, destination: Pubkey) -> ProgramResult {
+    pub fn create_sell_order(ctx: Context<CreateSellOrder>, price: u64, quantity: u64, destination: Pubkey) -> Result<()> {
         verify_metadata_and_derivation(
             ctx.accounts.metadata.as_ref(),
             &ctx.accounts.seller_nft_token_account.mint.key(),
@@ -134,16 +130,16 @@ pub mod comptoir {
         Ok(())
     }
 
-    pub fn remove_sell_order(ctx: Context<RemoveSellOrder>, nounce: u8, quantity_to_unlist: u64) -> ProgramResult {
+    pub fn remove_sell_order(ctx: Context<RemoveSellOrder>, quantity_to_unlist: u64) -> Result<()> {
         if ctx.accounts.sell_order.quantity < quantity_to_unlist {
-            return Err(ErrorCode::ErrTryingToUnlistMoreThanOwned.into());
+            return Err(error!(ErrorCode::ErrTryingToUnlistMoreThanOwned));
         }
 
         let seeds = &[
             PREFIX.as_bytes(),
             "vault".as_bytes(),
             ctx.accounts.seller_nft_token_account.mint.as_ref(),
-            &[nounce], ];
+            &[*ctx.bumps.get("vault").unwrap()], ];
         let signer = &[&seeds[..]];
 
         let cpi_accounts = Transfer {
@@ -164,7 +160,7 @@ pub mod comptoir {
         Ok(())
     }
 
-    pub fn add_quantity_to_sell_order(ctx: Context<SellOrderAddQuantity>, _nounce: u8, quantity_to_add: u64) -> ProgramResult {
+    pub fn add_quantity_to_sell_order(ctx: Context<SellOrderAddQuantity>, quantity_to_add: u64) -> Result<()> {
         let cpi_accounts = Transfer {
             from: ctx.accounts.seller_nft_token_account.to_account_info(),
             to: ctx.accounts.vault.to_account_info(),
@@ -179,10 +175,7 @@ pub mod comptoir {
         Ok(())
     }
 
-    pub fn buy<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info, Buy<'info>>,
-        nounce: u8, ask_quantity: u64,
-    ) -> ProgramResult {
+    pub fn buy<'a, 'b, 'c, 'info>(ctx: Context<'a, 'b, 'c, 'info, Buy<'info>>, ask_quantity: u64) -> Result<()> {
         let metadata = verify_metadata_and_derivation(
             ctx.accounts.metadata.as_ref(),
             &ctx.accounts.buyer_nft_token_account.mint.key(),
@@ -208,7 +201,7 @@ pub mod comptoir {
             PREFIX.as_bytes(),
             "vault".as_bytes(),
             ctx.accounts.buyer_nft_token_account.mint.as_ref(),
-            &[nounce], ];
+            &[*ctx.bumps.get("vault").unwrap()], ];
         let signer = &[&seeds[..]];
 
         let mut remaining_to_buy = ask_quantity;
@@ -287,12 +280,12 @@ pub mod comptoir {
         }
 
         if remaining_to_buy != 0 {
-            return Err(ErrorCode::ErrCouldNotBuyEnoughItem.into());
+            return Err(error!(ErrorCode::ErrCouldNotBuyEnoughItem));
         }
         Ok(())
     }
 
-    pub fn create_buy_offer(ctx: Context<CreateBuyOffer>, _nounce: u8, _buy_offer_nounce: u8, price_proposition: u64) -> ProgramResult {
+    pub fn create_buy_offer(ctx: Context<CreateBuyOffer>, price_proposition: u64) -> Result<()> {
         verify_metadata_and_derivation(
             ctx.accounts.metadata.as_ref(),
             &ctx.accounts.nft_mint.key(),
@@ -317,13 +310,13 @@ pub mod comptoir {
         Ok(())
     }
 
-    pub fn remove_buy_offer(ctx: Context<RemoveBuyOffer>, nounce: u8) -> ProgramResult {
+    pub fn remove_buy_offer(ctx: Context<RemoveBuyOffer>) -> Result<()> {
         let seeds = &[
             PREFIX.as_bytes(),
             ctx.accounts.comptoir.to_account_info().key.as_ref(),
             ctx.accounts.comptoir.mint.as_ref(),
             ESCROW.as_bytes(),
-            &[nounce], ];
+            &[*ctx.bumps.get("escrow").unwrap()], ];
 
         let signer: &[&[&[u8]]] = &[&seeds[..]];
         pay_with_signer(
@@ -337,7 +330,7 @@ pub mod comptoir {
         Ok(())
     }
 
-    pub fn execute_offer<'a, 'b, 'c, 'info>(ctx: Context<'a, 'b, 'c, 'info, ExecuteOffer<'info>>, escrow_nounce: u8) -> ProgramResult {
+    pub fn execute_offer<'a, 'b, 'c, 'info>(ctx: Context<'a, 'b, 'c, 'info, ExecuteOffer<'info>>) -> Result<()> {
         let metadata = verify_metadata_and_derivation(
             &ctx.accounts.metadata,
             &ctx.accounts.seller_nft_account.mint,
@@ -379,7 +372,7 @@ pub mod comptoir {
             ctx.accounts.comptoir.to_account_info().key.as_ref(),
             ctx.accounts.comptoir.mint.as_ref(),
             ESCROW.as_bytes(),
-            &[escrow_nounce], ];
+            &[*ctx.bumps.get("escrow").unwrap()], ];
         let signer: &[&[&[u8]]] = &[&seeds[..]];
 
         if let Some(creators) = creators_distributions_option.as_ref() {
@@ -419,12 +412,13 @@ pub mod comptoir {
 }
 
 #[derive(Accounts)]
-#[instruction(nounce: u8, buy_offer_nounce: u8, price_proposition: u64)]
+#[instruction(price_proposition: u64)]
 pub struct CreateBuyOffer<'info> {
     #[account(mut)]
     payer: Signer<'info>,
 
     nft_mint: Account<'info, Mint>,
+    /// CHECK: This is not dangerous because check it all the time using the verify_metadata_and_derivation func
     metadata: UncheckedAccount<'info>,
 
     comptoir: Box<Account<'info, Comptoir>>,
@@ -438,7 +432,7 @@ pub struct CreateBuyOffer<'info> {
     comptoir.mint.as_ref(),
     ESCROW.as_bytes()
     ],
-    bump = nounce,
+    bump,
     )]
     escrow: Box<Account<'info, TokenAccount>>,
 
@@ -462,8 +456,9 @@ pub struct CreateBuyOffer<'info> {
     price_proposition.to_string().as_bytes(),
     ESCROW.as_bytes(),
     ],
-    bump = buy_offer_nounce,
+    bump,
     payer = payer,
+    space = 144,
     )]
     buy_offer: Account<'info, BuyOffer>,
 
@@ -474,7 +469,6 @@ pub struct CreateBuyOffer<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(nounce: u8)]
 pub struct RemoveBuyOffer<'info> {
     #[account(mut)]
     buyer: Signer<'info>,
@@ -492,7 +486,7 @@ pub struct RemoveBuyOffer<'info> {
     comptoir.mint.as_ref(),
     ESCROW.as_bytes()
     ],
-    bump = nounce,
+    bump,
     )]
     escrow: Account<'info, TokenAccount>,
 
@@ -510,7 +504,6 @@ pub struct RemoveBuyOffer<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(escrow_nounce: u8)]
 pub struct ExecuteOffer<'info> {
     seller: Signer<'info>,
 
@@ -532,7 +525,7 @@ pub struct ExecuteOffer<'info> {
     comptoir.mint.as_ref(),
     ESCROW.as_bytes()
     ],
-    bump = escrow_nounce,
+    bump,
     )]
     escrow: Box<Account<'info, TokenAccount>>,
 
@@ -545,6 +538,7 @@ pub struct ExecuteOffer<'info> {
     seller_nft_account: Account<'info, TokenAccount>,
 
 
+    /// CHECK: This is not dangerous because check it all the time using the verify_metadata_and_derivation func
     metadata: UncheckedAccount<'info>,
 
     #[account(
@@ -563,7 +557,7 @@ pub struct ExecuteOffer<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(comptoir_nounce: u8, escrow_nounce: u8, comptoir_mint: Pubkey)]
+#[instruction(comptoir_mint: Pubkey)]
 pub struct CreateComptoir<'info> {
     #[account(mut)]
     payer: Signer<'info>,
@@ -573,8 +567,9 @@ pub struct CreateComptoir<'info> {
         PREFIX.as_bytes(),
         payer.key.as_ref()
     ],
-    bump = comptoir_nounce,
+    bump,
     payer = payer,
+    space = 112,
     )]
     comptoir: Account<'info, Comptoir>,
 
@@ -590,7 +585,7 @@ pub struct CreateComptoir<'info> {
     comptoir_mint.as_ref(),
     ESCROW.as_bytes()
     ],
-    bump = escrow_nounce,
+    bump,
     payer = payer,
     )]
     escrow: Account<'info, TokenAccount>,
@@ -609,7 +604,7 @@ pub struct UpdateComptoir<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(escrow_nounce: u8, new_comptoir_mint: Pubkey)]
+#[instruction(new_comptoir_mint: Pubkey)]
 pub struct UpdateComptoirMint<'info> {
     #[account(mut)]
     authority: Signer<'info>,
@@ -629,7 +624,7 @@ pub struct UpdateComptoirMint<'info> {
     new_comptoir_mint.as_ref(),
     ESCROW.as_bytes()
     ],
-    bump = escrow_nounce,
+    bump,
     payer = authority,
     )]
     escrow: Account<'info, TokenAccount>,
@@ -640,7 +635,7 @@ pub struct UpdateComptoirMint<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(_nounce: u8, symbol: String)]
+#[instruction(symbol: String)]
 pub struct CreateCollection<'info> {
     #[account(mut)]
     authority: Signer<'info>,
@@ -653,7 +648,7 @@ pub struct CreateCollection<'info> {
     symbol.as_bytes(),
     comptoir.key().as_ref(),
     ],
-    bump = _nounce,
+    bump,
     payer = authority,
     space = 90,
     )]
@@ -674,7 +669,7 @@ pub struct UpdateCollection<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(_nounce: u8, _sell_order_nounce: u8, price: u64)]
+#[instruction(price: u64)]
 pub struct CreateSellOrder<'info> {
     #[account(mut)]
     payer: Signer<'info>,
@@ -687,6 +682,7 @@ pub struct CreateSellOrder<'info> {
 
     #[account(constraint = mint.key() == seller_nft_token_account.mint)]
     mint: Account<'info, Mint>,
+    /// CHECK: This is not dangerous because check it all the time using the verify_metadata_and_derivation func
     metadata: UncheckedAccount<'info>,
 
     #[account(
@@ -698,7 +694,7 @@ pub struct CreateSellOrder<'info> {
     "vault".as_bytes(),
     seller_nft_token_account.mint.as_ref(),
     ],
-    bump = _nounce,
+    bump,
     payer = payer,
     )]
     vault: Account<'info, TokenAccount>,
@@ -710,8 +706,9 @@ pub struct CreateSellOrder<'info> {
     seller_nft_token_account.key().as_ref(),
     price.to_string().as_bytes(),
     ],
-    bump = _sell_order_nounce,
+    bump,
     payer = payer,
+    space = 120,
     )]
     sell_order: Account<'info, SellOrder>,
 
@@ -721,7 +718,6 @@ pub struct CreateSellOrder<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(_nounce: u8)]
 pub struct RemoveSellOrder<'info> {
     #[account(mut)]
     authority: Signer<'info>,
@@ -737,7 +733,7 @@ pub struct RemoveSellOrder<'info> {
     "vault".as_bytes(),
     seller_nft_token_account.mint.as_ref(),
     ],
-    bump = _nounce,
+    bump,
     )]
     vault: Account<'info, TokenAccount>,
 
@@ -747,7 +743,6 @@ pub struct RemoveSellOrder<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(_nounce: u8)]
 pub struct SellOrderAddQuantity<'info> {
     #[account(mut)]
     authority: Signer<'info>,
@@ -763,7 +758,7 @@ pub struct SellOrderAddQuantity<'info> {
     "vault".as_bytes(),
     seller_nft_token_account.mint.as_ref(),
     ],
-    bump = _nounce,
+    bump,
     )]
     vault: Account<'info, TokenAccount>,
 
@@ -773,7 +768,6 @@ pub struct SellOrderAddQuantity<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(_nounce: u8)]
 pub struct Buy<'info> {
     buyer: Signer<'info>,
     #[account(mut)]
@@ -787,6 +781,7 @@ pub struct Buy<'info> {
     #[account(constraint = collection.comptoir_key == comptoir.key())]
     collection: Account<'info, Collection>,
 
+    /// CHECK: This is not dangerous because check it all the time using the verify_metadata_and_derivation func
     metadata: UncheckedAccount<'info>,
 
     #[account(
@@ -796,7 +791,7 @@ pub struct Buy<'info> {
     "vault".as_bytes(),
     buyer_nft_token_account.mint.as_ref()
     ],
-    bump = _nounce,
+    bump,
     )]
     vault: Box<Account<'info, TokenAccount>>,
 
@@ -805,7 +800,6 @@ pub struct Buy<'info> {
 }
 
 #[account]
-#[derive(Default)]
 pub struct Comptoir {
     fees: u16,
     fees_destination: Pubkey,
@@ -814,7 +808,6 @@ pub struct Comptoir {
 }
 
 #[account]
-#[derive(Default)]
 pub struct SellOrder {
     price: u64,
     quantity: u64,
@@ -833,7 +826,6 @@ pub struct Collection {
 }
 
 #[account]
-#[derive(Default)]
 pub struct BuyOffer {
     comptoir: Pubkey,
     mint: Pubkey,
@@ -852,10 +844,10 @@ impl Collection {
         };
     }
 
-    pub fn validate(&self) -> ProgramResult {
+    pub fn validate(&self) -> Result<()> {
         if let Some(fee) = self.fees {
-            if fee > 1000 {
-                return Err(ErrorCode::ErrFeeShouldLowerOrEqualThan10000.into());
+            if fee > 10000 {
+                return Err(error!(ErrorCode::ErrFeeShouldLowerOrEqualThan10000));
             }
         }
         Ok(())
@@ -863,17 +855,17 @@ impl Collection {
 }
 
 impl Comptoir {
-    pub fn validate(&self) -> ProgramResult {
-        if self.fees > 1000 {
-            return Err(ErrorCode::ErrFeeShouldLowerOrEqualThan10000.into());
+    pub fn validate(&self) -> Result<()> {
+        if self.fees > 10000 {
+            return Err(error!(ErrorCode::ErrFeeShouldLowerOrEqualThan10000));
         }
         Ok(())
     }
 }
 
-fn verify_metadata_and_derivation(unverified_metadata: &AccountInfo, nft_mint: &Pubkey, collection: &Collection) -> core::result::Result<Metadata, ProgramError> {
+fn verify_metadata_and_derivation(unverified_metadata: &AccountInfo, nft_mint: &Pubkey, collection: &Collection) -> Result<Metadata> {
     if unverified_metadata.data_is_empty() {
-        return Err(ErrorCode::NotInitialized.into());
+        return Err(error!(ErrorCode::NotInitialized));
     };
     assert_derivation(
         &metaplex_token_metadata::id(),
@@ -886,7 +878,7 @@ fn verify_metadata_and_derivation(unverified_metadata: &AccountInfo, nft_mint: &
     )?;
     let metadata = Metadata::from_account_info(unverified_metadata)?;
     if !collection.is_part_of_collection(&metadata) {
-        return Err(ErrorCode::ErrNftNotPartOfCollection.into());
+        return Err(error!(ErrorCode::ErrNftNotPartOfCollection));
     }
     return Ok(metadata);
 }
@@ -933,7 +925,7 @@ fn verify_and_get_creators<'a, 'b, 'c, 'info>(creators: Vec<Creator>, remaining_
 }
 
 
-#[error]
+#[error_code]
 pub enum ErrorCode {
     #[msg("Fee should be <= 10000")]
     ErrFeeShouldLowerOrEqualThan10000,

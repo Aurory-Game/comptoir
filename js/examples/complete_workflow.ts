@@ -12,9 +12,9 @@ let provider = anchor.Provider.local('https://api.devnet.solana.com')
 anchor.setProvider(provider)
 
 async function workflow(comptoirMint: PublicKey, nftMint: PublicKey) {
-    let comptoirPDA = (await getComptoirPDA(
+    let comptoirPDA = await getComptoirPDA(
         anchor.Wallet.local().payer.publicKey
-    ))[0]
+    )
     let comptoir = new Comptoir(provider, comptoirPDA)
 
     await comptoir.createComptoir(
@@ -37,7 +37,7 @@ async function workflow(comptoirMint: PublicKey, nftMint: PublicKey) {
     )
 
 
-    let collectionPDA = (await getCollectionPDA(comptoir.comptoirPDA, 'AURY'))[0]
+    let collectionPDA = await getCollectionPDA(comptoir.comptoirPDA, 'AURY')
     let userNftAccount = await getAssociatedTokenAddress(anchor.Wallet.local().payer.publicKey, nftMint)
     let userTokenAccount = await getAssociatedTokenAddress(anchor.Wallet.local().payer.publicKey, comptoirMint)
 
@@ -59,7 +59,7 @@ async function workflow(comptoirMint: PublicKey, nftMint: PublicKey) {
     //We buy our own asset just for demonstration
     await collection.buy(
         nftMint,
-        [(await getSellOrderPDA(userNftAccount, sellPrice))[0]],
+        [await getSellOrderPDA(userNftAccount, sellPrice)],
         userNftAccount,
         userTokenAccount,
         sellQuantity,
