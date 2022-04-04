@@ -1,13 +1,13 @@
 import * as anchor from '@project-serum/anchor'
 import {Comptoir as ComptoirDefinition, IDL} from './types/comptoir'
 import {COMPTOIR_PROGRAM_ID} from './constant'
-import {Keypair, PublicKey} from '@solana/web3.js'
+import {Keypair, PublicKey, TransactionInstruction} from '@solana/web3.js'
 import {TOKEN_PROGRAM_ID} from '@solana/spl-token'
 import {getAssociatedTokenAddress, getNftVaultPDA, getSellOrderPDA} from './getPDAs'
 import {getMetadata} from './metaplex'
 import {programs} from '@metaplex/js'
 import * as idl from './types/comptoir.json'
-import {IdlAccounts} from "@project-serum/anchor";
+import {IdlAccounts, web3} from "@project-serum/anchor";
 
 const {Metadata} =
     programs.metadata
@@ -31,21 +31,21 @@ export class Collection {
         this.collectionPDA = collectionPDA
     }
 
-    async sellAsset(
+    async sellAssetInstruction(
         nftMint: PublicKey,
         sellerNftAccount: PublicKey,
         sellerDestination: PublicKey,
         price: anchor.BN,
         amount: anchor.BN,
-        seller: Keypair
-    ): Promise<string> {
+        seller: PublicKey,
+    ): Promise<TransactionInstruction> {
         let programNftVaultPDA = await getNftVaultPDA(nftMint)
         let sellOrderPDA = await getSellOrderPDA(sellerNftAccount, price)
 
         let metadataPDA = await Metadata.getPDA(nftMint)
         return await this.program.methods.createSellOrder(price, amount, sellerDestination).accounts(
             {
-                payer: seller.publicKey,
+                payer: seller,
                 sellerNftTokenAccount: sellerNftAccount,
                 comptoir: this.comptoirPDA,
                 collection: this.collectionPDA,
@@ -57,7 +57,41 @@ export class Collection {
                 tokenProgram: TOKEN_PROGRAM_ID,
                 rent: anchor.web3.SYSVAR_RENT_PUBKEY,
             }
-        ).signers([seller]).rpc()
+        ).instruction()
+    }
+
+    async sellAsset(
+        nftMint: PublicKey,
+        sellerNftAccount: PublicKey,
+        sellerDestination: PublicKey,
+        price: anchor.BN,
+        amount: anchor.BN,
+        seller: Keypair
+    ): Promise<string> {
+        let ix = await this.sellAssetInstruction(
+            nftMint, sellerNftAccount, sellerDestination,
+            price, amount, seller.publicKey,
+        )
+        return this._sendInstruction(ix, [seller])
+    }
+
+    async removeSellOrderInstruction(
+        nftMint: PublicKey,
+        sellerNftAccount: PublicKey,
+        sellOrderPDA: PublicKey,
+        amount: anchor.BN,
+        seller: PublicKey,
+    ): Promise<TransactionInstruction> {
+        let programNftVaultPDA = await getNftVaultPDA(nftMint)
+        return await this.program.methods.removeSellOrder(amount).accounts({
+            authority: seller,
+            sellerNftTokenAccount: sellerNftAccount,
+            vault: programNftVaultPDA,
+            sellOrder: sellOrderPDA,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+        }).instruction()
     }
 
     async removeSellOrder(
@@ -67,16 +101,33 @@ export class Collection {
         amount: anchor.BN,
         seller: Keypair,
     ): Promise<string> {
+        let ix = await this.removeSellOrderInstruction(
+            nftMint,
+            sellerNftAccount,
+            sellOrderPDA,
+            amount,
+            seller.publicKey,
+        )
+        return this._sendInstruction(ix, [seller])
+    }
+
+    async addToSellOrderInstruction(
+        nftMint: PublicKey,
+        sellerNftAccount: PublicKey,
+        sellOrderPDA: PublicKey,
+        amount: anchor.BN,
+        seller: PublicKey,
+    ): Promise<TransactionInstruction> {
         let programNftVaultPDA = await getNftVaultPDA(nftMint)
-        return await this.program.methods.removeSellOrder(amount).accounts({
-            authority: seller.publicKey,
+        return await this.program.methods.addQuantityToSellOrder(amount).accounts({
+            authority: seller,
             sellerNftTokenAccount: sellerNftAccount,
             vault: programNftVaultPDA,
             sellOrder: sellOrderPDA,
             systemProgram: anchor.web3.SystemProgram.programId,
             tokenProgram: TOKEN_PROGRAM_ID,
             rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-        }).signers([seller]).rpc()
+        }).instruction()
     }
 
     async addToSellOrder(
@@ -86,26 +137,24 @@ export class Collection {
         amount: anchor.BN,
         seller: Keypair,
     ): Promise<string> {
-        let programNftVaultPDA = await getNftVaultPDA(nftMint)
-        return await this.program.methods.addQuantityToSellOrder(amount).accounts({
-            authority: seller.publicKey,
-            sellerNftTokenAccount: sellerNftAccount,
-            vault: programNftVaultPDA,
-            sellOrder: sellOrderPDA,
-            systemProgram: anchor.web3.SystemProgram.programId,
-            tokenProgram: TOKEN_PROGRAM_ID,
-            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-        }).signers([seller]).rpc()
+        let ix = await this.addToSellOrderInstruction(
+            nftMint,
+            sellerNftAccount,
+            sellOrderPDA,
+            amount,
+            seller.publicKey,
+        )
+        return this._sendInstruction(ix, [seller])
     }
 
-    async buy(
+    async buyInstruction(
         nftMint: PublicKey,
         sellOrdersPDA: PublicKey[],
         buyerNftAccount: PublicKey,
         buyerPayingAccount: PublicKey,
         wanted_quantity: anchor.BN,
-        buyer: Keypair,
-    ): Promise<string> {
+        buyer: PublicKey,
+    ): Promise<TransactionInstruction> {
         let programNftVaultPDA = await getNftVaultPDA(nftMint)
         let comptoirAccount = await this.program.account.comptoir.fetch(this.comptoirPDA)
 
@@ -136,20 +185,39 @@ export class Collection {
         }
 
         return await this.program.methods.buy(wanted_quantity).accounts({
-                    buyer: buyer.publicKey,
-                    buyerNftTokenAccount: buyerNftAccount,
-                    buyerPayingTokenAccount: buyerPayingAccount,
-                    comptoir: this.comptoirPDA,
-                    comptoirDestAccount: comptoirAccount.feesDestination,
-                    collection: this.collectionPDA,
-                    metadata: await Metadata.getPDA(metadata.mint),
-                    vault: programNftVaultPDA,
-                    systemProgram: anchor.web3.SystemProgram.programId,
-                    tokenProgram: TOKEN_PROGRAM_ID,
-                }).remainingAccounts([
-                    ...creatorsAccounts,
-                    ...sellOrders,
-                ]).signers([buyer]).rpc()
+            buyer: buyer,
+            buyerNftTokenAccount: buyerNftAccount,
+            buyerPayingTokenAccount: buyerPayingAccount,
+            comptoir: this.comptoirPDA,
+            comptoirDestAccount: comptoirAccount.feesDestination,
+            collection: this.collectionPDA,
+            metadata: await Metadata.getPDA(metadata.mint),
+            vault: programNftVaultPDA,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            tokenProgram: TOKEN_PROGRAM_ID,
+        }).remainingAccounts([
+            ...creatorsAccounts,
+            ...sellOrders,
+        ]).instruction()
+    }
+
+    async buy(
+        nftMint: PublicKey,
+        sellOrdersPDA: PublicKey[],
+        buyerNftAccount: PublicKey,
+        buyerPayingAccount: PublicKey,
+        wanted_quantity: anchor.BN,
+        buyer: Keypair,
+    ): Promise<string> {
+        let ix = await this.buyInstruction(
+            nftMint,
+            sellOrdersPDA,
+            buyerNftAccount,
+            buyerPayingAccount,
+            wanted_quantity,
+            buyer.publicKey,
+        )
+        return this._sendInstruction(ix, [buyer])
     }
 
     async getCollection(): Promise<IdlAccounts<ComptoirDefinition>["collection"]> {
@@ -158,5 +226,11 @@ export class Collection {
         }
         this.collectionCache = await this.program.account.collection.fetch(this.collectionPDA)
         return this.collectionCache
+    }
+
+    _sendInstruction(ix: TransactionInstruction, signers: Keypair[]): Promise<string> {
+        let tx = new web3.Transaction()
+        tx.add(ix)
+        return this.program.provider.send(tx, signers)
     }
 }
