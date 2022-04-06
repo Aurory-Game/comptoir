@@ -698,6 +698,10 @@ export type Comptoir = {
         "kind": "struct",
         "fields": [
           {
+            "name": "comptoir",
+            "type": "publicKey"
+          },
+          {
             "name": "price",
             "type": "u64"
           },
@@ -1517,6 +1521,10 @@ export const IDL: Comptoir = {
       "type": {
         "kind": "struct",
         "fields": [
+          {
+            "name": "comptoir",
+            "type": "publicKey"
+          },
           {
             "name": "price",
             "type": "u64"
