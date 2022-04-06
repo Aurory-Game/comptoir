@@ -698,6 +698,10 @@
         "kind": "struct",
         "fields": [
           {
+            "name": "comptoir",
+            "type": "publicKey"
+          },
+          {
             "name": "price",
             "type": "u64"
           },

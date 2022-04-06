@@ -122,6 +122,7 @@ pub mod comptoir {
         token::transfer(cpi_ctx, quantity)?;
 
         let sell_order = &mut ctx.accounts.sell_order;
+        sell_order.comptoir = ctx.accounts.comptoir.key();
         sell_order.price = price;
         sell_order.quantity = quantity;
         sell_order.mint = ctx.accounts.seller_nft_token_account.mint;
@@ -214,8 +215,10 @@ pub mod comptoir {
             }
 
             let mut sell_order = sell_order_result.unwrap();
-            index = index + 1;
+            assert_eq!(sell_order.comptoir, ctx.accounts.comptoir.key());
             assert_eq!(sell_order.mint, ctx.accounts.buyer_nft_token_account.mint.key());
+
+            index = index + 1;
 
             let mut to_buy = remaining_to_buy;
             if sell_order.quantity < to_buy {
@@ -708,7 +711,7 @@ pub struct CreateSellOrder<'info> {
     ],
     bump,
     payer = payer,
-    space = 120,
+    space = 152,
     )]
     sell_order: Account<'info, SellOrder>,
 
@@ -809,6 +812,7 @@ pub struct Comptoir {
 
 #[account]
 pub struct SellOrder {
+    comptoir: Pubkey,
     price: u64,
     quantity: u64,
     mint: Pubkey,
