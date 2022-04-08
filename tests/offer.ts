@@ -1,63 +1,46 @@
 import * as anchor from '@project-serum/anchor';
 import {Program, web3} from '@project-serum/anchor';
-import {Comptoir} from '../target/types/comptoir';
 import * as splToken from '@solana/spl-token';
-import {PublicKey} from "@solana/web3.js";
-import {ASSOCIATED_TOKEN_PROGRAM_ID, Token, TOKEN_PROGRAM_ID} from "@solana/spl-token";
+import {Comptoir as ComptoirDefinition} from '../target/types/comptoir';
+import {Token, TOKEN_PROGRAM_ID} from "@solana/spl-token";
 import assert from "assert";
 import {nft_data, nft_json_url} from "./data";
 import {createMint} from "./utils/utils";
+import {Comptoir} from '../js/comptoir';
+import {Collection} from "../js/collection";
+import {getBuyOfferPDA, getCollectionPDA, getEscrowPDA} from "../js/getPDAs";
+import {PublicKey} from "@solana/web3.js";
+
 
 let provider = anchor.Provider.env()
 anchor.setProvider(provider);
 
-const program = anchor.workspace.Comptoir as Program<Comptoir>;
+const program = anchor.workspace.Comptoir as Program<ComptoirDefinition>;
 
 
 describe('comptoir with mint', () => {
     let admin: web3.Keypair;
-    let adminTokenAccount: splToken.AccountInfo;
-    let buyer: web3.Keypair;
-    let buyerTokenAccount: splToken.AccountInfo;
-    let buyerNftTokenAccount: web3.PublicKey;
+    let adminTokenAccount: PublicKey;
     let creator: web3.Keypair;
-    let creatorTokenAccount: splToken.AccountInfo;
+    let creatorTokenAccount: PublicKey;
+    let buyer: web3.Keypair;
+    let buyerTokenAccount: PublicKey;
+    let buyerNftTokenAccount: web3.PublicKey;
     let seller: web3.Keypair;
-    let sellerTokenAccount: splToken.AccountInfo;
-    let sellerNftAssociatedTokenAccount: web3.PublicKey;
-    let comptoirPDA: web3.PublicKey;
-    let comptoirDump: number;
+    let sellerTokenAccount: PublicKey;
+    let sellerNftTokenAccount: PublicKey;
     let comptoirMint: splToken.Token;
-    let fee = 200;
-    let collectionName = "AURY"
-    let collectionPDA: web3.PublicKey;
-    let collectionDump: number
-    let collectionFee = 500
     let nftMint: splToken.Token;
     let metadataPDA: web3.PublicKey;
-    let escrowPDA: web3.PublicKey;
-    let escrowDump: number;
-    let buyOfferPDA: web3.PublicKey;
-    let buyOfferDump: number;
+
+    let comptoir: Comptoir;
+    let collection: Collection;
+
 
     it('Prepare tests variables', async () => {
-        admin = anchor.web3.Keypair.generate()
-        let fromAirdropSignature = await provider.connection.requestAirdrop(
-            admin.publicKey,
-            anchor.web3.LAMPORTS_PER_SOL,
-        );
-        await provider.connection.confirmTransaction(fromAirdropSignature);
-
         creator = anchor.web3.Keypair.generate()
-        fromAirdropSignature = await provider.connection.requestAirdrop(
+        let fromAirdropSignature = await provider.connection.requestAirdrop(
             creator.publicKey,
-            anchor.web3.LAMPORTS_PER_SOL,
-        );
-        await provider.connection.confirmTransaction(fromAirdropSignature);
-
-        seller = anchor.web3.Keypair.generate()
-        fromAirdropSignature = await provider.connection.requestAirdrop(
-            seller.publicKey,
             anchor.web3.LAMPORTS_PER_SOL,
         );
         await provider.connection.confirmTransaction(fromAirdropSignature);
@@ -69,11 +52,19 @@ describe('comptoir with mint', () => {
         );
         await provider.connection.confirmTransaction(fromAirdropSignature);
 
-
-        [comptoirPDA, comptoirDump] = await anchor.web3.PublicKey.findProgramAddress(
-            [Buffer.from("COMPTOIR"), admin.publicKey.toBuffer()],
-            program.programId,
+        seller = anchor.web3.Keypair.generate()
+        fromAirdropSignature = await provider.connection.requestAirdrop(
+            seller.publicKey,
+            anchor.web3.LAMPORTS_PER_SOL,
         );
+        await provider.connection.confirmTransaction(fromAirdropSignature);
+
+        admin = anchor.web3.Keypair.generate()
+        fromAirdropSignature = await provider.connection.requestAirdrop(
+            admin.publicKey,
+            anchor.web3.LAMPORTS_PER_SOL,
+        );
+        await provider.connection.confirmTransaction(fromAirdropSignature);
 
         comptoirMint = await splToken.Token.createMint(
             provider.connection,
@@ -84,35 +75,21 @@ describe('comptoir with mint', () => {
             splToken.TOKEN_PROGRAM_ID,
         );
 
-        adminTokenAccount = await comptoirMint.getOrCreateAssociatedAccountInfo(
-            admin.publicKey,
-        );
-        creatorTokenAccount = await comptoirMint.getOrCreateAssociatedAccountInfo(
+        creatorTokenAccount = (await comptoirMint.getOrCreateAssociatedAccountInfo(
             creator.publicKey,
-        );
-        sellerTokenAccount = await comptoirMint.getOrCreateAssociatedAccountInfo(
-            seller.publicKey,
-        );
-        buyerTokenAccount = await comptoirMint.getOrCreateAssociatedAccountInfo(
+        )).address;
+
+        buyerTokenAccount = (await comptoirMint.getOrCreateAssociatedAccountInfo(
             buyer.publicKey,
-        );
+        )).address;
 
-        await comptoirMint.mintTo(buyerTokenAccount.address, admin, [], 1000);
+        sellerTokenAccount = (await comptoirMint.getOrCreateAssociatedAccountInfo(
+            seller.publicKey,
+        )).address;
 
-        [collectionPDA, collectionDump] = await anchor.web3.PublicKey.findProgramAddress(
-            [Buffer.from("COMPTOIR"), Buffer.from(collectionName), comptoirPDA.toBuffer()],
-            program.programId,
-        );
-
-        [escrowPDA, escrowDump] = await anchor.web3.PublicKey.findProgramAddress(
-            [
-                Buffer.from("COMPTOIR"),
-                comptoirPDA.toBuffer(),
-                comptoirMint.publicKey.toBuffer(),
-                Buffer.from("ESCROW"),
-            ],
-            program.programId,
-        );
+        adminTokenAccount = (await comptoirMint.getOrCreateAssociatedAccountInfo(
+            admin.publicKey,
+        )).address;
 
         const data = nft_data(creator.publicKey);
         const json_url = nft_json_url;
@@ -130,112 +107,75 @@ describe('comptoir with mint', () => {
         await provider.send(tx, signers);
 
         metadataPDA = metadataAddr
-        nftMint = new Token(provider.connection, mint.publicKey, TOKEN_PROGRAM_ID, admin)
+        nftMint = new Token(provider.connection, mint.publicKey, TOKEN_PROGRAM_ID, creator)
 
-        sellerNftAssociatedTokenAccount = await Token.getAssociatedTokenAddress(
-            ASSOCIATED_TOKEN_PROGRAM_ID,
-            TOKEN_PROGRAM_ID,
-            nftMint.publicKey,
-            seller.publicKey
-        );
+        buyerNftTokenAccount = (await nftMint.getOrCreateAssociatedAccountInfo(buyer.publicKey)).address
+        sellerNftTokenAccount = (await nftMint.getOrCreateAssociatedAccountInfo(seller.publicKey)).address
 
-        buyerNftTokenAccount = await Token.getAssociatedTokenAddress(
-            ASSOCIATED_TOKEN_PROGRAM_ID,
-            TOKEN_PROGRAM_ID,
-            nftMint.publicKey,
-            buyer.publicKey
-        );
+        await comptoirMint.mintTo(buyerTokenAccount, admin, [], 1000)
+        comptoir = new Comptoir(provider)
+        await comptoir.createComptoir(admin, comptoirMint.publicKey, 500, adminTokenAccount)
+        await comptoir.createCollection(admin, "AURY", creator.publicKey, "AURY", false)
 
-        [buyOfferPDA, buyOfferDump] = await anchor.web3.PublicKey.findProgramAddress(
-            [
-                Buffer.from("COMPTOIR"),
-                comptoirPDA.toBuffer(),
-                buyer.publicKey.toBuffer(),
-                mint.publicKey.toBuffer(),
-                Buffer.from("1000"),
-                Buffer.from("ESCROW"),
-            ],
-            program.programId,
-        );
-
-        await program.methods.createComptoir(comptoirMint.publicKey, fee, adminTokenAccount.address, admin.publicKey).accounts(
-            {
-                payer: admin.publicKey,
-                comptoir: comptoirPDA,
-                mint: comptoirMint.publicKey,
-                escrow: escrowPDA,
-                systemProgram: anchor.web3.SystemProgram.programId,
-                tokenProgram: TOKEN_PROGRAM_ID,
-                rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-            }).signers([admin]).rpc();
-
-        await program.methods.createCollection(collectionName, creator.publicKey, collectionFee, false).accounts(
-            {
-                authority: admin.publicKey,
-                comptoir: comptoirPDA,
-                collection: collectionPDA,
-                systemProgram: anchor.web3.SystemProgram.programId,
-                rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-            }).signers([admin]).rpc()
+        let collectionPDA = await getCollectionPDA(comptoir.comptoirPDA, "AURY")
+        collection = new Collection(provider, collectionPDA, comptoir)
     });
 
-    it('remove nft offer', async () => {
-        await program.methods.createBuyOffer(new anchor.BN(1000)).accounts(
-            {
-                payer: buyer.publicKey,
-                nftMint: nftMint.publicKey,
-                metadata: metadataPDA,
-                comptoir: comptoirPDA,
-                collection: collectionPDA,
-                escrow: escrowPDA,
-                buyerPayingAccount: buyerTokenAccount.address,
-                buyerNftAccount: buyerNftTokenAccount,
-                buyOffer: buyOfferPDA,
-                systemProgram: anchor.web3.SystemProgram.programId,
-                tokenProgram: TOKEN_PROGRAM_ID,
-                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-                rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-            }).signers([buyer]).rpc()
 
-        await program.methods.removeBuyOffer().accounts({
-            buyer: buyer.publicKey,
-            buyerPayingAccount: buyerTokenAccount.address,
-            comptoir: comptoirPDA,
-            escrow: escrowPDA,
-            buyOffer: buyOfferPDA,
-            systemProgram: anchor.web3.SystemProgram.programId,
-            tokenProgram: TOKEN_PROGRAM_ID,
-            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-        }).signers([buyer]).rpc()
+    it('remove nft offer', async () => {
+        let price = new anchor.BN(1000)
+        await collection.createBuyOffer(
+            nftMint.publicKey,
+            price,
+            buyerNftTokenAccount,
+            buyerTokenAccount,
+            buyer,
+        )
+
+        let escrowPDA = await getEscrowPDA(comptoir.comptoirPDA, comptoirMint.publicKey)
+        let buyOfferPDA = await getBuyOfferPDA(
+            comptoir.comptoirPDA,
+            buyer.publicKey,
+            nftMint.publicKey,
+            price,
+        )
+
+        await collection.removeBuyOffer(
+            nftMint.publicKey,
+            buyOfferPDA,
+            buyerTokenAccount,
+            buyer,
+        )
 
         let escrowAccount = await comptoirMint.getAccountInfo(escrowPDA)
         assert.equal(escrowAccount.amount, 0);
-        let updatedBuyerAccount = await comptoirMint.getAccountInfo(buyerTokenAccount.address)
-        assert.equal(updatedBuyerAccount.amount, 1000);
+        let updatedBuyerAccount = await comptoirMint.getAccountInfo(buyerTokenAccount)
+        assert.equal(updatedBuyerAccount.amount, price.toNumber());
 
         let closedBuyOffer = await provider.connection.getAccountInfo(buyOfferPDA);
         assert.equal(closedBuyOffer, null);
     });
 
     it('create nft offer', async () => {
-        await program.methods.createBuyOffer(new anchor.BN(1000)).accounts({
-            payer: buyer.publicKey,
-            nftMint: nftMint.publicKey,
-            metadata: metadataPDA,
-            comptoir: comptoirPDA,
-            collection: collectionPDA,
-            escrow: escrowPDA,
-            buyerPayingAccount: buyerTokenAccount.address,
-            buyerNftAccount: buyerNftTokenAccount,
-            buyOffer: buyOfferPDA,
-            systemProgram: anchor.web3.SystemProgram.programId,
-            tokenProgram: TOKEN_PROGRAM_ID,
-            associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-        }).signers([buyer]).rpc()
+        let price = new anchor.BN(1000)
+        await collection.createBuyOffer(
+            nftMint.publicKey,
+            price,
+            buyerNftTokenAccount,
+            buyerTokenAccount,
+            buyer,
+        )
+
+        let escrowPDA = await getEscrowPDA(comptoir.comptoirPDA, comptoirMint.publicKey)
+        let buyOfferPDA = await getBuyOfferPDA(
+            comptoir.comptoirPDA,
+            buyer.publicKey,
+            nftMint.publicKey,
+            price,
+        )
 
         let buyOffer = await program.account.buyOffer.fetch(buyOfferPDA)
-        assert.equal(buyOffer.comptoir.toString(), comptoirPDA.toString());
+        assert.equal(buyOffer.comptoir.toString(), comptoir.comptoirPDA.toString());
         assert.equal(buyOffer.mint.toString(), nftMint.publicKey.toString());
         assert.equal(buyOffer.proposedPrice.toString(), "1000");
         assert.equal(buyOffer.authority.toString(), buyer.publicKey.toString());
@@ -244,52 +184,51 @@ describe('comptoir with mint', () => {
         let escrowAccount = await comptoirMint.getAccountInfo(escrowPDA)
         assert.equal(escrowAccount.amount, 1000);
 
-        let updatedBuyerAccount = await comptoirMint.getAccountInfo(buyerTokenAccount.address)
+        let updatedBuyerAccount = await comptoirMint.getAccountInfo(buyerTokenAccount)
         assert.equal(updatedBuyerAccount.amount, 0);
     });
 
     it('execute nft offer', async () => {
-        await program.methods.executeOffer().accounts({
-            seller: seller.publicKey,
-            buyer: buyer.publicKey,
-            comptoir: comptoirPDA,
-            collection: collectionPDA,
-            comptoirDestAccount: adminTokenAccount.address,
-            escrow: escrowPDA,
-            sellerFundsDestAccount: sellerTokenAccount.address,
-            destination: buyerNftTokenAccount,
-            sellerNftAccount: sellerNftAssociatedTokenAccount,
-            buyOffer: buyOfferPDA,
-            metadata: metadataPDA,
-            systemProgram: anchor.web3.SystemProgram.programId,
-            tokenProgram: TOKEN_PROGRAM_ID,
-            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-        }).remainingAccounts([{pubkey: creatorTokenAccount.address, isWritable: true, isSigner: false}])
-          .signers([seller]).rpc()
+        let escrowPDA = await getEscrowPDA(comptoir.comptoirPDA, comptoirMint.publicKey)
+        let buyOfferPDA = await getBuyOfferPDA(
+            comptoir.comptoirPDA,
+            buyer.publicKey,
+            nftMint.publicKey,
+            new anchor.BN(1000),
+        )
+
+        await collection.executeOffer(
+            nftMint.publicKey,
+            buyOfferPDA,
+            buyer.publicKey,
+            buyerNftTokenAccount,
+            sellerTokenAccount,
+            sellerNftTokenAccount,
+            seller,
+        )
 
         let escrowAccount = await comptoirMint.getAccountInfo(escrowPDA)
         assert.equal(escrowAccount.amount, 0);
 
-        let updatedBuyerAccount = await comptoirMint.getAccountInfo(buyerTokenAccount.address)
-        assert.equal(updatedBuyerAccount.amount, 0);
+        let updatedBuyerAccount = await comptoirMint.getAccountInfo(buyerTokenAccount)
+        assert.equal(updatedBuyerAccount.amount.toNumber(), 0);
 
         let updatedBuyerNftAccount = await nftMint.getAccountInfo(buyerNftTokenAccount)
-        assert.equal(updatedBuyerNftAccount.amount, 1);
+        assert.equal(updatedBuyerNftAccount.amount.toNumber(), 1);
 
-        let updatedSellerAccount = await comptoirMint.getAccountInfo(sellerTokenAccount.address)
-        assert.equal(updatedSellerAccount.amount, 850);
+        let updatedSellerAccount = await comptoirMint.getAccountInfo(sellerTokenAccount)
+        assert.equal(updatedSellerAccount.amount.toNumber(), 850);
 
-        let updatedSellerNftAccount = await nftMint.getAccountInfo(sellerNftAssociatedTokenAccount)
+        let updatedSellerNftAccount = await nftMint.getAccountInfo(sellerNftTokenAccount)
         assert.equal(updatedSellerNftAccount.amount.toNumber(), 4);
 
-        let updatedComptoirDestinationAccount = await comptoirMint.getAccountInfo(adminTokenAccount.address)
+        let updatedComptoirDestinationAccount = await comptoirMint.getAccountInfo(adminTokenAccount)
         assert.equal(updatedComptoirDestinationAccount.amount.toNumber(), 50);
 
-        let updatedCreator = await comptoirMint.getAccountInfo(creatorTokenAccount.address)
+        let updatedCreator = await comptoirMint.getAccountInfo(creatorTokenAccount)
         assert.equal(updatedCreator.amount.toNumber(), 100);
 
         let closedBuyOffer = await provider.connection.getAccountInfo(buyOfferPDA);
         assert.equal(closedBuyOffer, null);
     });
-})
-;
+});

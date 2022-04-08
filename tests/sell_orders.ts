@@ -83,7 +83,7 @@ describe('multi sell orders test', () => {
         await comptoir.createCollection(seller,"AURY", creator.publicKey, "AURY", false)
 
         let collectionPDA = await getCollectionPDA(comptoir.comptoirPDA, "AURY")
-        collection = new Collection(provider, comptoir.comptoirPDA, collectionPDA)
+        collection = new Collection(provider, collectionPDA, comptoir)
     });
 
     it('sell and buy multiple orders', async function () {

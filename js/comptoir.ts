@@ -6,11 +6,13 @@ import * as idl from './types/comptoir.json'
 import {Keypair, PublicKey} from '@solana/web3.js'
 import {TOKEN_PROGRAM_ID} from '@solana/spl-token'
 import {getCollectionPDA, getComptoirPDA, getEscrowPDA} from './getPDAs'
+import {IdlAccounts} from "@project-serum/anchor";
 
 export class Comptoir {
     program: anchor.Program<ComptoirDefinition>
     comptoirPDA: PublicKey
-    comptoir: Comptoir
+
+    private comptoirCache?: IdlAccounts<ComptoirDefinition>["comptoir"]
 
     constructor(provider: anchor.Provider, comptoirPDA?: PublicKey) {
         // @ts-ignore
@@ -64,5 +66,13 @@ export class Comptoir {
                 systemProgram: anchor.web3.SystemProgram.programId,
                 rent: anchor.web3.SYSVAR_RENT_PUBKEY,
             }).signers([authority]).rpc()
+    }
+
+    async getComptoir(): Promise<IdlAccounts<ComptoirDefinition>["comptoir"]> {
+        if (this.comptoirCache) {
+            return this.comptoirCache
+        }
+        this.comptoirCache = await this.program.account.comptoir.fetch(this.comptoirPDA)
+        return this.comptoirCache
     }
 }
