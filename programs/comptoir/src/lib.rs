@@ -11,7 +11,7 @@ use metaplex_token_metadata::utils::{assert_derivation};
 use crate::constant::{ASSOCIATED_TOKEN_PROGRAM};
 use crate::constant::{PREFIX, ESCROW};
 
-declare_id!("CVZPBk21RauVxKgZRrhbCiMZezXRpN9i5JuHDL9NHRdQ");
+declare_id!("FCoMPzD3cihsM7EBSbXtorF2yHL4jJ6vrbWtdVaN7qZc");
 
 #[program]
 pub mod comptoir {
@@ -177,6 +177,9 @@ pub mod comptoir {
     }
 
     pub fn buy<'a, 'b, 'c, 'info>(ctx: Context<'a, 'b, 'c, 'info, Buy<'info>>, ask_quantity: u64) -> Result<()> {
+        let mut total_spent_ed: u64 = 0;
+        let mut sell_order_ed: Vec<BoughtSellOrderEvent> = vec![];
+
         let metadata = verify_metadata_and_derivation(
             ctx.accounts.metadata.as_ref(),
             &ctx.accounts.buyer_nft_token_account.mint.key(),
@@ -273,6 +276,14 @@ pub mod comptoir {
                 }
             }
 
+            emit!(BoughtSellOrderEvent{
+                sell_order: sell_order.key(),
+                quantity: to_buy,
+                buyer: ctx.accounts.buyer.key(),
+            });
+
+            total_spent_ed = total_spent_ed + total_amount;
+
             sell_order.quantity = sell_order.quantity - to_buy;
             sell_order.exit(ctx.program_id)?;
 
@@ -285,6 +296,7 @@ pub mod comptoir {
         if remaining_to_buy != 0 {
             return Err(error!(ErrorCode::ErrCouldNotBuyEnoughItem));
         }
+
         Ok(())
     }
 
@@ -928,6 +940,12 @@ fn verify_and_get_creators<'a, 'b, 'c, 'info>(creators: Vec<Creator>, remaining_
     return creators_distributions;
 }
 
+#[event]
+pub struct BoughtSellOrderEvent {
+    pub sell_order: Pubkey,
+    pub quantity: u64,
+    pub buyer: Pubkey,
+}
 
 #[error_code]
 pub enum ErrorCode {
