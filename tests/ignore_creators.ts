@@ -8,7 +8,7 @@ import {nft_data, nft_json_url} from "./data";
 import {createMint} from "./utils/utils";
 import {Comptoir } from '../js/comptoir';
 import {Collection} from "../js/collection";
-import {getCollectionPDA, getEscrowPDA, getNftVaultPDA, getSellOrderPDA} from "../js/getPDAs";
+import {getCollectionPDA, getSellOrderPDA} from "../js/getPDAs";
 
 let provider = anchor.Provider.env()
 anchor.setProvider(provider);
@@ -85,7 +85,7 @@ describe('ignore creators tests', () => {
         await comptoir.createCollection(seller, "AURY", creator.publicKey, "AURY", true)
 
         let collectionPDA = await getCollectionPDA(comptoir.comptoirPDA, "AURY")
-        collection = new Collection(provider, comptoir.comptoirPDA, collectionPDA)
+        collection = new Collection(provider, collectionPDA, comptoir)
     });
 
     it('sell order ignore creators', async function () {

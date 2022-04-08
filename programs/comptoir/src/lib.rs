@@ -178,7 +178,6 @@ pub mod comptoir {
 
     pub fn buy<'a, 'b, 'c, 'info>(ctx: Context<'a, 'b, 'c, 'info, Buy<'info>>, ask_quantity: u64) -> Result<()> {
         let mut total_spent_ed: u64 = 0;
-        let mut sell_order_ed: Vec<BoughtSellOrderEvent> = vec![];
 
         let metadata = verify_metadata_and_derivation(
             ctx.accounts.metadata.as_ref(),

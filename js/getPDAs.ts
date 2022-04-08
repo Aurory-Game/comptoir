@@ -64,3 +64,16 @@ export const getAssociatedTokenAddress = async (addr: PublicKey, mint: PublicKey
         false,
     )
 }
+export const getBuyOfferPDA = async (comptoirPDA: PublicKey, buyer: PublicKey, mint: PublicKey, price: anchor.BN): Promise<PublicKey> => {
+    return (await anchor.web3.PublicKey.findProgramAddress(
+        [
+            Buffer.from("COMPTOIR"),
+            comptoirPDA.toBuffer(),
+            buyer.toBuffer(),
+            mint.toBuffer(),
+            Buffer.from(price.toString()),
+            Buffer.from("ESCROW"),
+        ],
+        COMPTOIR_PROGRAM_ID,
+    ))[0]
+}

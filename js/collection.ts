@@ -2,32 +2,32 @@ import * as anchor from '@project-serum/anchor'
 import {Comptoir as ComptoirDefinition, IDL} from './types/comptoir'
 import {COMPTOIR_PROGRAM_ID} from './constant'
 import {Keypair, PublicKey, TransactionInstruction} from '@solana/web3.js'
-import {TOKEN_PROGRAM_ID} from '@solana/spl-token'
-import {getAssociatedTokenAddress, getNftVaultPDA, getSellOrderPDA} from './getPDAs'
+import {ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID} from '@solana/spl-token'
+import {getAssociatedTokenAddress, getBuyOfferPDA, getEscrowPDA, getNftVaultPDA, getSellOrderPDA} from './getPDAs'
 import {getMetadata} from './metaplex'
 import {programs} from '@metaplex/js'
 import * as idl from './types/comptoir.json'
-import {IdlAccounts, web3} from "@project-serum/anchor";
+import {BN, IdlAccounts, web3} from "@project-serum/anchor";
+import {Comptoir} from "./comptoir";
 
 const {Metadata} =
     programs.metadata
 
 export class Collection {
     program: anchor.Program<ComptoirDefinition>
-    comptoirPDA: PublicKey
     collectionPDA: PublicKey
+    comptoir: Comptoir
 
     private collectionCache?: IdlAccounts<ComptoirDefinition>["collection"]
 
     constructor(
         provider: anchor.Provider,
-        comptoirPDA: PublicKey,
         collectionPDA: PublicKey,
+        comptoir: Comptoir,
     ) {
+        this.comptoir = comptoir
         // @ts-ignore
         this.program = new anchor.Program(idl, COMPTOIR_PROGRAM_ID, provider)
-
-        this.comptoirPDA = comptoirPDA
         this.collectionPDA = collectionPDA
     }
 
@@ -47,7 +47,7 @@ export class Collection {
             {
                 payer: seller,
                 sellerNftTokenAccount: sellerNftAccount,
-                comptoir: this.comptoirPDA,
+                comptoir: this.comptoir.comptoirPDA,
                 collection: this.collectionPDA,
                 mint: nftMint,
                 metadata: metadataPDA,
@@ -156,7 +156,7 @@ export class Collection {
         buyer: PublicKey,
     ): Promise<TransactionInstruction> {
         let programNftVaultPDA = await getNftVaultPDA(nftMint)
-        let comptoirAccount = await this.program.account.comptoir.fetch(this.comptoirPDA)
+        let comptoirAccount = await this.program.account.comptoir.fetch(this.comptoir.comptoirPDA)
 
         let metadata = await getMetadata(
             anchor.getProvider().connection,
@@ -167,14 +167,7 @@ export class Collection {
         let creatorsAccounts = []
 
         if (!collection.ignoreCreatorFee) {
-            for (let creator of metadata.data.creators) {
-                let creatorAddress = new PublicKey(creator.address)
-                let creatorATA = await getAssociatedTokenAddress(creatorAddress, comptoirAccount.mint)
-
-                creatorsAccounts.push(
-                    {pubkey: creatorATA, isWritable: true, isSigner: false},
-                )
-            }
+            creatorsAccounts = await this._extractCreatorsAsRemainingAccount(metadata)
         }
 
         let sellOrders = []
@@ -188,7 +181,7 @@ export class Collection {
             buyer: buyer,
             buyerNftTokenAccount: buyerNftAccount,
             buyerPayingTokenAccount: buyerPayingAccount,
-            comptoir: this.comptoirPDA,
+            comptoir: this.comptoir.comptoirPDA,
             comptoirDestAccount: comptoirAccount.feesDestination,
             collection: this.collectionPDA,
             metadata: await Metadata.getPDA(metadata.mint),
@@ -220,6 +213,165 @@ export class Collection {
         return this._sendInstruction(ix, [buyer])
     }
 
+    async createBuyOfferInstruction(
+        nftMintToBuy: PublicKey,
+        offerPrice: anchor.BN,
+        buyerNftAccount: PublicKey,
+        buyerPayingAccount: PublicKey,
+        buyer: PublicKey,
+    ): Promise<TransactionInstruction> {
+        let metadataPDA = await Metadata.getPDA(nftMintToBuy)
+        let escrowPDA = await getEscrowPDA(
+            this.comptoir.comptoirPDA,
+            (await this.comptoir.getComptoir()).mint
+        )
+
+        let buyOfferPDA = await getBuyOfferPDA(
+            this.comptoir.comptoirPDA,
+            buyer,
+            nftMintToBuy,
+            offerPrice,
+        )
+
+        return await this.program.methods.createBuyOffer(offerPrice).accounts(
+            {
+                payer: buyer,
+                nftMint: nftMintToBuy,
+                metadata: metadataPDA,
+                comptoir: this.comptoir.comptoirPDA,
+                collection: this.collectionPDA,
+                escrow: escrowPDA,
+                buyerNftAccount: buyerNftAccount,
+                buyerPayingAccount: buyerPayingAccount,
+                buyOffer: buyOfferPDA,
+                systemProgram: anchor.web3.SystemProgram.programId,
+                tokenProgram: TOKEN_PROGRAM_ID,
+                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+                rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+            }
+        ).instruction()
+    }
+
+    async createBuyOffer(
+        nftMintToBuy: PublicKey,
+        offerPrice: anchor.BN,
+        buyerNftAccount: PublicKey,
+        buyerPayingAccount: PublicKey,
+        buyer: Keypair,
+    ): Promise<string> {
+        let ix = await this.createBuyOfferInstruction(
+            nftMintToBuy,
+            offerPrice,
+            buyerNftAccount,
+            buyerPayingAccount,
+            buyer.publicKey,
+        )
+        return this._sendInstruction(ix, [buyer])
+    }
+
+    async removeBuyOfferInstruction(
+        nftMintToBuy: PublicKey,
+        buyOfferPDA: PublicKey,
+        buyerTokenAccount: PublicKey,
+        buyer: PublicKey,
+    ): Promise<TransactionInstruction> {
+        let escrowPDA = await getEscrowPDA(
+            this.comptoir.comptoirPDA,
+            (await this.comptoir.getComptoir()).mint
+        )
+
+        return await this.program.methods.removeBuyOffer().accounts({
+            buyer: buyer,
+            buyerPayingAccount: buyerTokenAccount,
+            comptoir: this.comptoir.comptoirPDA,
+            escrow: escrowPDA,
+            buyOffer: buyOfferPDA,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+        }).instruction()
+    }
+
+    async removeBuyOffer(
+        nftMintToBuy: PublicKey,
+        buyOfferPDA: PublicKey,
+        buyerTokenAccount: PublicKey,
+        buyer: Keypair,
+    ): Promise<string> {
+        let ix = await this.removeBuyOfferInstruction(
+            nftMintToBuy,
+            buyOfferPDA,
+            buyerTokenAccount,
+            buyer.publicKey,
+        )
+        return this._sendInstruction(ix, [buyer])
+    }
+
+    async executeOfferInstruction(
+        nftMint: PublicKey,
+        buyOfferPDA: PublicKey,
+        buyer: PublicKey,
+        buyerNftTokenAccount: PublicKey,
+        sellerTokenAccount: PublicKey,
+        sellerNftTokenAccount: PublicKey,
+        seller: PublicKey,
+    ): Promise<TransactionInstruction> {
+        let metadata = await getMetadata(
+            anchor.getProvider().connection,
+            nftMint,
+        )
+
+        let escrowPDA = await getEscrowPDA(
+            this.comptoir.comptoirPDA,
+            (await this.comptoir.getComptoir()).mint
+        )
+
+        let creatorsAccounts = []
+        if (!(await this.getCollection()).ignoreCreatorFee) {
+            creatorsAccounts = await this._extractCreatorsAsRemainingAccount(metadata)
+        }
+
+        return await this.program.methods.executeOffer().accounts({
+            seller: seller,
+            buyer: buyer,
+            comptoir: this.comptoir.comptoirPDA,
+            collection: this.collectionPDA,
+            comptoirDestAccount: (await this.comptoir.getComptoir()).feesDestination,
+            escrow: escrowPDA,
+            sellerFundsDestAccount: sellerTokenAccount,
+            destination: buyerNftTokenAccount,
+            sellerNftAccount: sellerNftTokenAccount,
+            buyOffer: buyOfferPDA,
+            metadata: await Metadata.getPDA(nftMint),
+            systemProgram: anchor.web3.SystemProgram.programId,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+        }).remainingAccounts([
+            ...creatorsAccounts,
+        ]).instruction()
+    }
+
+    async executeOffer(
+        nftMint: PublicKey,
+        buyOfferPDA: PublicKey,
+        buyer: PublicKey,
+        buyerNftTokenAccount: PublicKey,
+        sellerTokenAccount: PublicKey,
+        sellerNftTokenAccount: PublicKey,
+        seller: Keypair,
+    ) {
+        let ix = await this.executeOfferInstruction(
+            nftMint,
+            buyOfferPDA,
+            buyer,
+            buyerNftTokenAccount,
+            sellerTokenAccount,
+            sellerNftTokenAccount,
+            seller.publicKey,
+        )
+        return this._sendInstruction(ix, [seller])
+    }
+
     async getCollection(): Promise<IdlAccounts<ComptoirDefinition>["collection"]> {
         if (this.collectionCache) {
             return this.collectionCache
@@ -232,5 +384,19 @@ export class Collection {
         let tx = new web3.Transaction()
         tx.add(ix)
         return this.program.provider.send(tx, signers)
+    }
+
+    async _extractCreatorsAsRemainingAccount(metadata) {
+        let creatorsAccounts = []
+        for (let creator of metadata.data.creators) {
+            let creatorAddress = new PublicKey(creator.address)
+            let comptoirMint = (await this.comptoir.getComptoir()).mint
+
+            let creatorATA = await getAssociatedTokenAddress(creatorAddress, comptoirMint)
+            creatorsAccounts.push(
+                {pubkey: creatorATA, isWritable: true, isSigner: false},
+            )
+        }
+        return creatorsAccounts
     }
 }
