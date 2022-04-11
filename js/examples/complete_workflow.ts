@@ -41,7 +41,7 @@ async function workflow(comptoirMint: PublicKey, nftMint: PublicKey) {
     let userNftAccount = await getAssociatedTokenAddress(anchor.Wallet.local().payer.publicKey, nftMint)
     let userTokenAccount = await getAssociatedTokenAddress(anchor.Wallet.local().payer.publicKey, comptoirMint)
 
-    let collection = new Collection(provider, comptoir.comptoirPDA, collectionPDA)
+    let collection = new Collection(provider, collectionPDA, comptoir)
 
     let sellPrice = new anchor.BN(1000)
     let sellQuantity = new anchor.BN(1)
