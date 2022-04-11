@@ -783,6 +783,28 @@ export type Comptoir = {
       }
     }
   ],
+  "events": [
+    {
+      "name": "BoughtSellOrderEvent",
+      "fields": [
+        {
+          "name": "sellOrder",
+          "type": "publicKey",
+          "index": false
+        },
+        {
+          "name": "quantity",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "buyer",
+          "type": "publicKey",
+          "index": false
+        }
+      ]
+    }
+  ],
   "errors": [
     {
       "code": 6000,
@@ -1605,6 +1627,28 @@ export const IDL: Comptoir = {
           }
         ]
       }
+    }
+  ],
+  "events": [
+    {
+      "name": "BoughtSellOrderEvent",
+      "fields": [
+        {
+          "name": "sellOrder",
+          "type": "publicKey",
+          "index": false
+        },
+        {
+          "name": "quantity",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "buyer",
+          "type": "publicKey",
+          "index": false
+        }
+      ]
     }
   ],
   "errors": [

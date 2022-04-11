@@ -783,6 +783,28 @@
       }
     }
   ],
+  "events": [
+    {
+      "name": "BoughtSellOrderEvent",
+      "fields": [
+        {
+          "name": "sellOrder",
+          "type": "publicKey",
+          "index": false
+        },
+        {
+          "name": "quantity",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "buyer",
+          "type": "publicKey",
+          "index": false
+        }
+      ]
+    }
+  ],
   "errors": [
     {
       "code": 6000,
@@ -819,8 +841,5 @@
       "name": "NotInitialized",
       "msg": "AccountNotInitialized"
     }
-  ],
-  "metadata": {
-    "address": "CVZPBk21RauVxKgZRrhbCiMZezXRpN9i5JuHDL9NHRdQ"
-  }
+  ]
 }
