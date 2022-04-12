@@ -6,3 +6,4 @@ dependencies
 target
 **/*.rs.bk
 comptoir/node_modules
+dist/

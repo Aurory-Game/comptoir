@@ -1,22 +1,18 @@
 import * as anchor from '@project-serum/anchor';
-import {Program, web3} from '@project-serum/anchor';
+import {web3} from '@project-serum/anchor';
 import * as splToken from '@solana/spl-token';
-import {Comptoir as ComptoirDefinition} from '../target/types/comptoir';
 import {Token, TOKEN_PROGRAM_ID} from "@solana/spl-token";
 import assert from "assert";
 import {nft_data, nft_json_url} from "./data";
 import {createMint} from "./utils/utils";
-import {Comptoir} from '../js/comptoir';
-import {Collection} from "../js/collection";
-import {getBuyOfferPDA, getCollectionPDA, getEscrowPDA} from "../js/getPDAs";
+import {Comptoir} from 'comptoirjs/comptoir';
+import {Collection} from "comptoirjs/collection";
+import {getBuyOfferPDA, getCollectionPDA, getEscrowPDA} from "comptoirjs/getPDAs";
 import {PublicKey} from "@solana/web3.js";
 
 
 let provider = anchor.Provider.env()
 anchor.setProvider(provider);
-
-const program = anchor.workspace.Comptoir as Program<ComptoirDefinition>;
-
 
 describe('comptoir with mint', () => {
     let admin: web3.Keypair;
@@ -174,7 +170,7 @@ describe('comptoir with mint', () => {
             price,
         )
 
-        let buyOffer = await program.account.buyOffer.fetch(buyOfferPDA)
+        let buyOffer = await comptoir.program.account.buyOffer.fetch(buyOfferPDA)
         assert.equal(buyOffer.comptoir.toString(), comptoir.comptoirPDA.toString());
         assert.equal(buyOffer.mint.toString(), nftMint.publicKey.toString());
         assert.equal(buyOffer.proposedPrice.toString(), "1000");

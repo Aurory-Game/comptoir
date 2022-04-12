@@ -1,19 +1,16 @@
 import * as anchor from '@project-serum/anchor';
-import {Program, web3} from '@project-serum/anchor';
-import {Comptoir as ComptoirProgramType} from '../target/types/comptoir';
+import {web3} from '@project-serum/anchor';
 import * as splToken from '@solana/spl-token';
-import {ASSOCIATED_TOKEN_PROGRAM_ID, Token, TOKEN_PROGRAM_ID} from "@solana/spl-token";
+import {Token, TOKEN_PROGRAM_ID} from "@solana/spl-token";
 import assert from "assert";
 import {nft_data, nft_json_url} from "./data";
 import {createMint} from "./utils/utils";
-import {Comptoir } from '../js/comptoir';
-import {Collection} from "../js/collection";
-import {getCollectionPDA, getSellOrderPDA} from "../js/getPDAs";
+import {Comptoir} from 'comptoirjs/comptoir';
+import {Collection} from "comptoirjs/collection";
+import {getCollectionPDA, getSellOrderPDA} from "comptoirjs/getPDAs";
 
 let provider = anchor.Provider.env()
 anchor.setProvider(provider);
-
-const program = anchor.workspace.Comptoir as Program<ComptoirProgramType>;
 
 describe('ignore creators tests', () => {
     let creator: web3.Keypair;
