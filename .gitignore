@@ -7,3 +7,4 @@ target
 **/*.rs.bk
 comptoir/node_modules
 dist/
+js/lib
