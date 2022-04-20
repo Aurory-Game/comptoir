@@ -19,5 +19,8 @@
   "scripts": {
     "prepublishOnly": "yarn lint",
     "lint": "tsc --pretty"
-  }
+  },
+  "type": "commonjs",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts"
 }

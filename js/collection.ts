@@ -189,7 +189,7 @@ export class Collection {
       this.comptoir.comptoirPDA
     );
 
-    let metadata = await getMetadata(anchor.getProvider().connection, nftMint);
+    let metadata = await getMetadata(this.program.provider.connection, nftMint);
 
     let collection = await this.getCollection();
     let creatorsAccounts: {
@@ -377,7 +377,7 @@ export class Collection {
     sellerNftTokenAccount: PublicKey,
     seller: PublicKey
   ): Promise<TransactionInstruction> {
-    let metadata = await getMetadata(anchor.getProvider().connection, nftMint);
+    let metadata = await getMetadata(this.program.provider.connection, nftMint);
 
     if (!this.comptoir.comptoirPDA) {
       throw new Error('comptoirPDA is not set');
