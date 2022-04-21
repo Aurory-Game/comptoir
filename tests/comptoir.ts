@@ -2,7 +2,7 @@ import * as anchor from '@project-serum/anchor';
 import {Program, web3} from '@project-serum/anchor';
 import {Comptoir} from '../target/types/comptoir';
 import * as splToken from '@solana/spl-token';
-import {PublicKey} from "@solana/web3.js";
+import {PublicKey, Transaction} from "@solana/web3.js";
 import {ASSOCIATED_TOKEN_PROGRAM_ID, Token, TOKEN_PROGRAM_ID} from "@solana/spl-token";
 import assert from "assert";
 import {nft_data, nft_json_url} from "./data";
