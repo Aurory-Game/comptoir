@@ -1,15 +1,13 @@
 import * as anchor from '@project-serum/anchor';
-import {web3} from '@project-serum/anchor';
+import {Provider, web3} from '@project-serum/anchor';
 import * as splToken from '@solana/spl-token';
 import {Token, TOKEN_PROGRAM_ID} from "@solana/spl-token";
 import assert from "assert";
 import {nft_data, nft_json_url} from "./data";
 import {createMint} from "./utils/utils";
-import {Comptoir} from 'comptoirjs/comptoir';
-import {Collection} from "comptoirjs/collection";
-import {getCollectionPDA, getSellOrderPDA} from "comptoirjs/getPDAs";
+import {Comptoir, Collection, getCollectionPDA, getSellOrderPDA} from '@aurory/comptoirjs';
 
-let provider = anchor.Provider.env()
+let provider = anchor.AnchorProvider.local()
 anchor.setProvider(provider);
 
 describe('ignore creators tests', () => {
@@ -69,8 +67,9 @@ describe('ignore creators tests', () => {
             data,
             json_url
         );
+
         const signers = [mint, creator];
-        await provider.send(tx, signers);
+        await provider.sendAndConfirm(tx, signers)
 
         metadataPDA = metadataAddr
         nftMint = new Token(provider.connection, mint.publicKey, TOKEN_PROGRAM_ID, seller)

@@ -8,7 +8,7 @@ import assert from "assert";
 import {nft_data, nft_json_url} from "./data";
 import {createMint} from "./utils/utils";
 
-let provider = anchor.Provider.env()
+let provider = anchor.getProvider()
 anchor.setProvider(provider);
 
 const program = anchor.workspace.Comptoir as Program<Comptoir>;
@@ -115,7 +115,7 @@ describe('comptoir with mint', () => {
             json_url
         );
         const signers = [mint, creator];
-        await provider.send(tx, signers);
+        await provider.sendAndConfirm(tx, signers);
 
         metadataPDA = metadataAddr
         nftMint = new Token(provider.connection, mint.publicKey, TOKEN_PROGRAM_ID, admin)
@@ -280,7 +280,7 @@ describe('comptoir with mint', () => {
     });
 
     it('create collection', async () => {
-        await program.methods.createCollection(collectionName, creator.publicKey, collectionFee, false).accounts(
+        await program.methods.createCollection(collectionName, collectionName, creator.publicKey, collectionFee, false).accounts(
             {
                 authority: admin.publicKey,
                 comptoir: comptoirPDA,
@@ -307,7 +307,7 @@ describe('comptoir with mint', () => {
             program.programId,
         );
         await assert.rejects(
-            program.methods.createCollection(collectionName+"fail", creator.publicKey, feeAbove100, false).accounts({
+            program.methods.createCollection(collectionName+"fail", collectionName, creator.publicKey, feeAbove100, false).accounts({
                 authority: admin.publicKey,
                 comptoir: comptoirPDA,
                 collection: failcollectionPDA,

@@ -60,14 +60,15 @@ export class Comptoir {
     }
     let collectionPDA = await getCollectionPDA(
       this.comptoirPDA,
-      collection_symbol
+        name
     );
 
     return await this.program.methods
       .createCollection(
+        name,
         collection_symbol,
         required_metadata_signer,
-        fee ?? 0,
+        fee ? fee : null,
         ignore_creators
       )
       .accounts({
