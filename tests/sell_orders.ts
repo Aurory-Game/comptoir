@@ -5,11 +5,8 @@ import {Token, TOKEN_PROGRAM_ID} from "@solana/spl-token";
 import assert from "assert";
 import {nft_data, nft_json_url} from "./data";
 import {createMint} from "./utils/utils";
-import {Comptoir } from 'comptoirjs/comptoir';
-import {Collection} from "comptoirjs/collection";
-import {getCollectionPDA, getNftVaultPDA, getSellOrderPDA} from "comptoirjs/getPDAs";
-
-let provider = anchor.Provider.env()
+import {Comptoir, Collection, getSellOrderPDA, getCollectionPDA, getNftVaultPDA} from "@aurory/comptoirjs";
+let provider = anchor.getProvider()
 anchor.setProvider(provider);
 
 describe('multi sell orders test', () => {
@@ -70,7 +67,7 @@ describe('multi sell orders test', () => {
             json_url
         );
         const signers = [mint, creator];
-        await provider.send(tx, signers);
+        await provider.sendAndConfirm(tx, signers);
 
         metadataPDA = metadataAddr
         nftMint = new Token(provider.connection, mint.publicKey, TOKEN_PROGRAM_ID, creator)

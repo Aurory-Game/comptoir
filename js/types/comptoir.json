@@ -176,6 +176,10 @@
       ],
       "args": [
         {
+          "name": "name",
+          "type": "string"
+        },
+        {
           "name": "symbol",
           "type": "string"
         },
@@ -732,6 +736,10 @@
           {
             "name": "comptoirKey",
             "type": "publicKey"
+          },
+          {
+            "name": "name",
+            "type": "string"
           },
           {
             "name": "symbol",

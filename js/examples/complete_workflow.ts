@@ -8,7 +8,7 @@ import {createMint} from '../../tests/utils/utils'
 import * as splToken from '@solana/spl-token'
 import {Collection} from '../collection'
 
-let provider = anchor.Provider.local('https://api.devnet.solana.com')
+let provider = anchor.AnchorProvider.local('https://api.devnet.solana.com')
 anchor.setProvider(provider)
 
 async function workflow(comptoirMint: PublicKey, nftMint: PublicKey) {
@@ -81,7 +81,7 @@ async function mintMeNft(): Promise<PublicKey> {
         json_url
     )
     const signers = [mint, anchor.Wallet.local().payer]
-    await provider.send(tx, signers)
+    await provider.sendAndConfirm(tx, signers)
 
     return mint.publicKey
 }

@@ -464,7 +464,8 @@ export class Collection {
   ): Promise<string> {
     let tx = new web3.Transaction();
     tx.add(ix);
-    return this.program.provider.send(tx, signers);
+    // @ts-ignore
+    return this.program.provider.sendAll([{tx, signers}]);
   }
 
   async _extractCreatorsAsRemainingAccount(metadata: MetadataData) {

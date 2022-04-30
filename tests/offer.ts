@@ -5,13 +5,11 @@ import {Token, TOKEN_PROGRAM_ID} from "@solana/spl-token";
 import assert from "assert";
 import {nft_data, nft_json_url} from "./data";
 import {createMint} from "./utils/utils";
-import {Comptoir} from 'comptoirjs/comptoir';
-import {Collection} from "comptoirjs/collection";
-import {getBuyOfferPDA, getCollectionPDA, getEscrowPDA} from "comptoirjs/getPDAs";
+import {Comptoir, Collection, getBuyOfferPDA, getCollectionPDA, getEscrowPDA} from "@aurory/comptoirjs";
 import {PublicKey} from "@solana/web3.js";
 
 
-let provider = anchor.Provider.env()
+let provider = anchor.getProvider()
 anchor.setProvider(provider);
 
 describe('comptoir with mint', () => {
@@ -100,7 +98,7 @@ describe('comptoir with mint', () => {
             json_url
         );
         const signers = [mint, creator];
-        await provider.send(tx, signers);
+        await provider.sendAndConfirm(tx, signers);
 
         metadataPDA = metadataAddr
         nftMint = new Token(provider.connection, mint.publicKey, TOKEN_PROGRAM_ID, creator)

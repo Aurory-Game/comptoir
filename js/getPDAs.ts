@@ -35,11 +35,11 @@ export const getEscrowPDA = async (
 
 export const getCollectionPDA = async (
   comptoirPDA: PublicKey,
-  symbol: string
+  name: string
 ): Promise<PublicKey> => {
   return (
     await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from('COMPTOIR'), Buffer.from(symbol), comptoirPDA.toBuffer()],
+      [Buffer.from('COMPTOIR'), Buffer.from(name), comptoirPDA.toBuffer()],
       COMPTOIR_PROGRAM_ID
     )
   )[0];
