@@ -11,12 +11,15 @@ import { IdlAccounts } from '@project-serum/anchor';
 export class Comptoir {
   program: anchor.Program<ComptoirDefinition>;
   comptoirPDA: PublicKey | null;
+  programID: PublicKey;
 
   private comptoirCache?: IdlAccounts<ComptoirDefinition>['comptoir'];
 
-  constructor(provider: anchor.Provider, comptoirPDA?: PublicKey) {
+  constructor(provider: anchor.Provider, comptoirPDA?: PublicKey, programID?: PublicKey) {
+    this.programID = programID ? programID : COMPTOIR_PROGRAM_ID
     // @ts-ignore
-    this.program = new anchor.Program(idl, COMPTOIR_PROGRAM_ID, provider);
+    this.program = new anchor.Program(idl, this.programID, provider);
+
     this.comptoirPDA = comptoirPDA ?? null;
   }
 
@@ -26,9 +29,9 @@ export class Comptoir {
     fees: number,
     feesDestination: PublicKey
   ): Promise<string> {
-    let comptoirPDA = await getComptoirPDA(owner.publicKey);
+    let comptoirPDA = await getComptoirPDA(owner.publicKey, this.programID);
 
-    let escrowPDA = await getEscrowPDA(comptoirPDA, mint);
+    let escrowPDA = await getEscrowPDA(comptoirPDA, mint, this.programID);
 
     this.comptoirPDA = comptoirPDA;
 
@@ -60,7 +63,8 @@ export class Comptoir {
     }
     let collectionPDA = await getCollectionPDA(
       this.comptoirPDA,
-        name
+        name,
+        this.programID
     );
 
     return await this.program.methods
