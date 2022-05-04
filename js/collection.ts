@@ -273,7 +273,8 @@ export class Collection {
       this.comptoir.comptoirPDA,
       (
         await this.comptoir.getComptoir()
-      ).mint
+      ).mint,
+      this.comptoir.programID
     );
 
     let buyOfferPDA = await getBuyOfferPDA(
@@ -336,7 +337,8 @@ export class Collection {
       this.comptoir.comptoirPDA,
       (
         await this.comptoir.getComptoir()
-      ).mint
+      ).mint,
+      this.comptoir.programID
     );
 
     return await this.program.methods
@@ -388,7 +390,8 @@ export class Collection {
       this.comptoir.comptoirPDA,
       (
         await this.comptoir.getComptoir()
-      ).mint
+      ).mint,
+      this.comptoir.programID
     );
 
     let creatorsAccounts: {
